@@ -21,10 +21,8 @@ import {
 import { knowledgeSupportedFileExts } from '@shared/utils/file'
 
 import { assertBaseCanRunRuntimeOperation } from '../baseGuards'
-import { cancelActiveKnowledgeSubtreeJobs, purgeKnowledgeSubtreeWithinLock } from '../subtreePurge'
 import { classifyKnowledgeItemSource, isContainerKnowledgeItem } from '../items'
 import type { KnowledgeLockManager } from '../KnowledgeLockManager'
-import { planKnowledgeItemSource } from '../sources/sourcePlanning'
 import {
   assertKnowledgeFileTargetAvailable,
   collectKnowledgeReservedRelativePaths,
@@ -36,6 +34,8 @@ import {
   needsProcessedArtifactReservation,
   reserveImportedFileRelativePath
 } from '../pathStorage'
+import { planKnowledgeItemSource } from '../sources/sourcePlanning'
+import { cancelActiveKnowledgeSubtreeJobs, purgeKnowledgeSubtreeWithinLock } from '../subtreePurge'
 import { cancelJobOrThrow } from '../tasks/utils/cancel'
 import {
   type KnowledgeBaseId,

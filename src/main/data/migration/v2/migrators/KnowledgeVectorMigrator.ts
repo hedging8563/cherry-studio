@@ -4,18 +4,15 @@ import path from 'node:path'
 import { knowledgeBaseTable, knowledgeItemTable } from '@data/db/schemas/knowledge'
 import { loggerService } from '@logger'
 import { DOCUMENT_SEPARATOR } from '@main/features/knowledge/indexing/chunk'
-import {
-  type MaterialFieldSource,
-  toMaterialRelativePath
-} from '@main/features/knowledge/indexing/materialFields'
-import { deriveNoteSnapshotSlug } from '@main/features/knowledge/sources/noteSnapshot'
-import { serializeOkfFrontmatter } from '@main/features/knowledge/sources/okfFrontmatter'
-import { deriveUrlSnapshotSlug, deriveUrlSnapshotTitle } from '@main/features/knowledge/sources/urlSnapshot'
+import { type MaterialFieldSource, toMaterialRelativePath } from '@main/features/knowledge/indexing/materialFields'
 import {
   assertSafeKnowledgeRelativePath,
   collectKnowledgeReservedRelativePaths,
   reserveImportedFileRelativePath
 } from '@main/features/knowledge/pathStorage'
+import { deriveNoteSnapshotSlug } from '@main/features/knowledge/sources/noteSnapshot'
+import { serializeOkfFrontmatter } from '@main/features/knowledge/sources/okfFrontmatter'
+import { deriveUrlSnapshotSlug, deriveUrlSnapshotTitle } from '@main/features/knowledge/sources/urlSnapshot'
 import {
   type BetterSqlite3Driver,
   openBetterSqlite3IndexDriver

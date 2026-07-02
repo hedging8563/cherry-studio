@@ -13,8 +13,8 @@ import type {
   RestoreKnowledgeBaseResult
 } from '@shared/data/types/knowledge'
 
-import { KnowledgeBaseAdminService } from './KnowledgeBaseAdminService'
 import { KnowledgeIngestionService } from './ingestion/KnowledgeIngestionService'
+import { KnowledgeBaseAdminService } from './KnowledgeBaseAdminService'
 import { KnowledgeLockManager } from './KnowledgeLockManager'
 import type {
   KnowledgeConceptContent,
