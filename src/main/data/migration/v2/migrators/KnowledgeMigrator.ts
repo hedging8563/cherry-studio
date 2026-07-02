@@ -12,7 +12,7 @@ import { loggerService } from '@logger'
 import {
   needsProcessedArtifactReservation,
   reserveImportedFileRelativePath
-} from '@main/features/knowledge/storage/pathStorage'
+} from '@main/features/knowledge/pathStorage'
 import { sanitizeFilename } from '@main/utils/file'
 import { copy, ensureDir } from '@main/utils/file/fs'
 import type { ExecuteResult, PrepareResult, ValidateResult, ValidationError } from '@shared/data/migration/v2/types'

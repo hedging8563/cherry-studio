@@ -20,8 +20,8 @@ import {
 } from '@shared/data/types/knowledge'
 import { knowledgeSupportedFileExts } from '@shared/utils/file'
 
-import { assertBaseCanRunRuntimeOperation } from '../base/guards'
-import { cancelActiveKnowledgeSubtreeJobs, purgeKnowledgeSubtreeWithinLock } from '../cleanup/subtreePurge'
+import { assertBaseCanRunRuntimeOperation } from '../baseGuards'
+import { cancelActiveKnowledgeSubtreeJobs, purgeKnowledgeSubtreeWithinLock } from '../subtreePurge'
 import { classifyKnowledgeItemSource, isContainerKnowledgeItem } from '../items'
 import type { KnowledgeLockManager } from '../KnowledgeLockManager'
 import { planKnowledgeItemSource } from '../sources/sourcePlanning'
@@ -35,7 +35,7 @@ import {
   getProcessedMarkdownRelativePath,
   needsProcessedArtifactReservation,
   reserveImportedFileRelativePath
-} from '../storage/pathStorage'
+} from '../pathStorage'
 import { cancelJobOrThrow } from '../tasks/utils/cancel'
 import {
   type KnowledgeBaseId,
