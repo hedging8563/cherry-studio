@@ -12,8 +12,8 @@ import {
   getFileProcessingMarkdownArtifactPath
 } from '../../fileProcessing/persistence/artifacts'
 import type { FileProcessingJobPayload } from '../../fileProcessing/tasks/shared'
+import type { KnowledgeLockManager } from '../base/KnowledgeLockManager'
 import type { KnowledgeIngestionService } from '../ingestion/KnowledgeIngestionService'
-import type { KnowledgeLockManager } from '../KnowledgeLockManager'
 import { toKnowledgeRelativePath } from '../pathStorage'
 import { knowledgeQueueName, toKnowledgeBaseId, toKnowledgeItemId } from '../types'
 import type { KnowledgeCheckFileProcessingResultPayload } from './jobTypes'

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { hashEmbeddingText } from '../../vectorstore/indexStore/hashing'
-import type { RebuildMaterialInput } from '../../vectorstore/indexStore/model'
+import { hashEmbeddingText } from '../../pipeline/vectorstore/indexStore/hashing'
+import type { RebuildMaterialInput } from '../../pipeline/vectorstore/indexStore/model'
 import {
   captureNoteSnapshotFileMock,
   captureUrlSnapshotFileMock,

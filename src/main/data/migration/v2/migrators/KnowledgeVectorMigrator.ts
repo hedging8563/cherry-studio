@@ -3,26 +3,29 @@ import path from 'node:path'
 
 import { knowledgeBaseTable, knowledgeItemTable } from '@data/db/schemas/knowledge'
 import { loggerService } from '@logger'
-import { DOCUMENT_SEPARATOR } from '@main/features/knowledge/indexing/chunk'
-import { type MaterialFieldSource, toMaterialRelativePath } from '@main/features/knowledge/indexing/materialFields'
 import {
   assertSafeKnowledgeRelativePath,
   collectKnowledgeReservedRelativePaths,
   reserveImportedFileRelativePath
 } from '@main/features/knowledge/pathStorage'
-import { deriveNoteSnapshotSlug } from '@main/features/knowledge/sources/noteSnapshot'
-import { serializeOkfFrontmatter } from '@main/features/knowledge/sources/okfFrontmatter'
-import { deriveUrlSnapshotSlug, deriveUrlSnapshotTitle } from '@main/features/knowledge/sources/urlSnapshot'
+import { DOCUMENT_SEPARATOR } from '@main/features/knowledge/pipeline/indexing/chunk'
+import {
+  type MaterialFieldSource,
+  toMaterialRelativePath
+} from '@main/features/knowledge/pipeline/indexing/materialFields'
+import { deriveNoteSnapshotSlug } from '@main/features/knowledge/pipeline/sources/noteSnapshot'
+import { serializeOkfFrontmatter } from '@main/features/knowledge/pipeline/sources/okfFrontmatter'
+import { deriveUrlSnapshotSlug, deriveUrlSnapshotTitle } from '@main/features/knowledge/pipeline/sources/urlSnapshot'
 import {
   type BetterSqlite3Driver,
   openBetterSqlite3IndexDriver
-} from '@main/features/knowledge/vectorstore/indexStore/BetterSqlite3Driver'
-import { betterSqlite3VectorIndex } from '@main/features/knowledge/vectorstore/indexStore/BetterSqlite3VectorIndex'
-import { hashEmbeddingText } from '@main/features/knowledge/vectorstore/indexStore/hashing'
-import { ensureIndexMeta } from '@main/features/knowledge/vectorstore/indexStore/indexMeta'
-import { KnowledgeIndexStore } from '@main/features/knowledge/vectorstore/indexStore/KnowledgeIndexStore'
-import type { RebuildMaterialInput } from '@main/features/knowledge/vectorstore/indexStore/model'
-import { createKnowledgeIndexSchema } from '@main/features/knowledge/vectorstore/indexStore/schema'
+} from '@main/features/knowledge/pipeline/vectorstore/indexStore/BetterSqlite3Driver'
+import { betterSqlite3VectorIndex } from '@main/features/knowledge/pipeline/vectorstore/indexStore/BetterSqlite3VectorIndex'
+import { hashEmbeddingText } from '@main/features/knowledge/pipeline/vectorstore/indexStore/hashing'
+import { ensureIndexMeta } from '@main/features/knowledge/pipeline/vectorstore/indexStore/indexMeta'
+import { KnowledgeIndexStore } from '@main/features/knowledge/pipeline/vectorstore/indexStore/KnowledgeIndexStore'
+import type { RebuildMaterialInput } from '@main/features/knowledge/pipeline/vectorstore/indexStore/model'
+import { createKnowledgeIndexSchema } from '@main/features/knowledge/pipeline/vectorstore/indexStore/schema'
 import type { ExecuteResult, PrepareResult, ValidateResult, ValidationError } from '@shared/data/migration/v2/types'
 import {
   KNOWLEDGE_BASE_ERROR_MISSING_EMBEDDING_MODEL,

@@ -131,23 +131,23 @@ vi.mock('@data/services/KnowledgeItemService', () => ({
   }
 }))
 
-vi.mock('../../readers/KnowledgeReader', () => ({
+vi.mock('../../pipeline/readers/KnowledgeReader', () => ({
   loadKnowledgeItemDocuments: loadKnowledgeItemDocumentsMock
 }))
 
-vi.mock('../../sources/prepare', () => ({
+vi.mock('../../pipeline/sources/prepare', () => ({
   prepareKnowledgeItem: prepareKnowledgeItemMock
 }))
 
-vi.mock('../../sources/url', () => ({
+vi.mock('../../pipeline/sources/url', () => ({
   fetchKnowledgeWebPage: fetchKnowledgeWebPageMock
 }))
 
-vi.mock('../../sources/urlSnapshot', () => ({
+vi.mock('../../pipeline/sources/urlSnapshot', () => ({
   captureUrlSnapshotFile: captureUrlSnapshotFileMock
 }))
 
-vi.mock('../../sources/noteSnapshot', () => ({
+vi.mock('../../pipeline/sources/noteSnapshot', () => ({
   captureNoteSnapshotFile: captureNoteSnapshotFileMock
 }))
 
@@ -167,7 +167,7 @@ vi.mock('../../pathStorage', async () => {
   }
 })
 
-vi.mock('../../indexing/embed', () => ({
+vi.mock('../../pipeline/indexing/embed', () => ({
   embedKnowledgeTexts: embedKnowledgeTextsMock
 }))
 
