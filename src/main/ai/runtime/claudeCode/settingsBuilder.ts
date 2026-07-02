@@ -72,8 +72,8 @@ import { languageEnglishNameMap } from '@shared/utils/languages'
 import { isExternalCliProvider } from '@shared/utils/provider'
 import { app } from 'electron'
 
+import { detectGlobalInstall } from '../toolApproval/dependencyGuard'
 import type { AgentRuntimeUserInput } from '../types'
-import { detectGlobalInstall } from './dependencyGuard'
 import { decisionToPermissionResult, toolApprovalRegistry } from './ToolApprovalRegistry'
 import type { ClaudeCodeSettings, McpToolDisplayMetadata, SteerHolder, ToolApprovalEmitterHolder } from './types'
 
@@ -705,7 +705,7 @@ async function buildToolPermissions(
       return { behavior: 'deny', message: 'Approval emitter not ready' }
     }
     return new Promise<PermissionResult>((resolve) => {
-      toolApprovalRegistry.register({
+      const pending = toolApprovalRegistry.register({
         approvalId,
         sessionId: session.id,
         toolCallId: opts.toolUseID,
@@ -714,6 +714,9 @@ async function buildToolPermissions(
         signal: opts.signal,
         resolve: (decision) => resolve(decisionToPermissionResult(decision, input))
       })
+      // Skip the approval card when the request resolved synchronously (no pending
+      // entry to answer) — see ToolApprovalRegistry.register.
+      if (!pending) return
       emit({
         type: 'tool-approval-request',
         approvalId,
