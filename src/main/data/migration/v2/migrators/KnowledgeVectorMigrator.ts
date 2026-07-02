@@ -3,19 +3,19 @@ import path from 'node:path'
 
 import { knowledgeBaseTable, knowledgeItemTable } from '@data/db/schemas/knowledge'
 import { loggerService } from '@logger'
-import { DOCUMENT_SEPARATOR } from '@main/features/knowledge/utils/indexing/chunk'
+import { DOCUMENT_SEPARATOR } from '@main/features/knowledge/indexing/chunk'
 import {
   type MaterialFieldSource,
   toMaterialRelativePath
-} from '@main/features/knowledge/utils/indexing/materialFields'
-import { deriveNoteSnapshotSlug } from '@main/features/knowledge/utils/sources/noteSnapshot'
-import { serializeOkfFrontmatter } from '@main/features/knowledge/utils/sources/okfFrontmatter'
-import { deriveUrlSnapshotSlug, deriveUrlSnapshotTitle } from '@main/features/knowledge/utils/sources/urlSnapshot'
+} from '@main/features/knowledge/indexing/materialFields'
+import { deriveNoteSnapshotSlug } from '@main/features/knowledge/sources/noteSnapshot'
+import { serializeOkfFrontmatter } from '@main/features/knowledge/sources/okfFrontmatter'
+import { deriveUrlSnapshotSlug, deriveUrlSnapshotTitle } from '@main/features/knowledge/sources/urlSnapshot'
 import {
   assertSafeKnowledgeRelativePath,
   collectKnowledgeReservedRelativePaths,
   reserveImportedFileRelativePath
-} from '@main/features/knowledge/utils/storage/pathStorage'
+} from '@main/features/knowledge/storage/pathStorage'
 import {
   type BetterSqlite3Driver,
   openBetterSqlite3IndexDriver
@@ -48,7 +48,7 @@ import {
 const logger = loggerService.withContext('KnowledgeVectorMigrator')
 
 // Runtime vector store + material layout — source of truth:
-// src/main/features/knowledge/utils/storage/pathStorage.ts
+// src/main/features/knowledge/storage/pathStorage.ts
 // (CHERRY_META_DIR / VECTOR_STORE_FILE / MATERIAL_ROOT_DIR). Runtime opens
 // {knowledgeBaseDir}/{baseId}/.cherry/index.sqlite by the migrated (new) base id, and resolves
 // every material's bytes at {knowledgeBaseDir}/{baseId}/raw/{relativePath}, so the migrator must

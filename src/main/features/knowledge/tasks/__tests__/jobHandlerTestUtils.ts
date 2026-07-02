@@ -4,7 +4,7 @@ import type { KnowledgeBase, KnowledgeItemOf } from '@shared/data/types/knowledg
 import { MockMainCacheServiceUtils } from '@test-mocks/main/CacheService'
 import { beforeEach, vi } from 'vitest'
 
-import type * as PathStorage from '../../utils/storage/pathStorage'
+import type * as PathStorage from '../../storage/pathStorage'
 
 const mocks = vi.hoisted(() => ({
   cancelMock: vi.fn(),
@@ -135,24 +135,24 @@ vi.mock('../../readers/KnowledgeReader', () => ({
   loadKnowledgeItemDocuments: loadKnowledgeItemDocumentsMock
 }))
 
-vi.mock('../../utils/sources/prepare', () => ({
+vi.mock('../../sources/prepare', () => ({
   prepareKnowledgeItem: prepareKnowledgeItemMock
 }))
 
-vi.mock('../../utils/sources/url', () => ({
+vi.mock('../../sources/url', () => ({
   fetchKnowledgeWebPage: fetchKnowledgeWebPageMock
 }))
 
-vi.mock('../../utils/sources/urlSnapshot', () => ({
+vi.mock('../../sources/urlSnapshot', () => ({
   captureUrlSnapshotFile: captureUrlSnapshotFileMock
 }))
 
-vi.mock('../../utils/sources/noteSnapshot', () => ({
+vi.mock('../../sources/noteSnapshot', () => ({
   captureNoteSnapshotFile: captureNoteSnapshotFileMock
 }))
 
-vi.mock('../../utils/storage/pathStorage', async () => {
-  const actual = await vi.importActual<typeof PathStorage>('../../utils/storage/pathStorage')
+vi.mock('../../storage/pathStorage', async () => {
+  const actual = await vi.importActual<typeof PathStorage>('../../storage/pathStorage')
   return {
     ...actual,
     // Stub the best-effort cleanup the handlers call. Its swallow-on-failure
@@ -167,7 +167,7 @@ vi.mock('../../utils/storage/pathStorage', async () => {
   }
 })
 
-vi.mock('../../utils/indexing/embed', () => ({
+vi.mock('../../indexing/embed', () => ({
   embedKnowledgeTexts: embedKnowledgeTextsMock
 }))
 
