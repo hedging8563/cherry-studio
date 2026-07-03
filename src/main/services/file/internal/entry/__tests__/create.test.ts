@@ -345,6 +345,40 @@ describe('internal/entry/create.createInternal', () => {
         ).rejects.toThrow(/case-collision/i)
       }
     )
+
+    it.skipIf(process.platform === 'linux')(
+      'upgrades delete_when_unreferenced to manual through the case-collision peer reuse path',
+      async () => {
+        const upper = path.join(tmp, 'UPGRADE.txt')
+        const lower = path.join(tmp, 'upgrade.txt')
+        await writeFile(upper, 'x')
+        const first = await ensureExternal(deps, {
+          externalPath: upper as FilePath,
+          cleanupPolicy: 'delete_when_unreferenced'
+        })
+        expect(first.cleanupPolicy).toBe('delete_when_unreferenced')
+        const second = await ensureExternal(deps, { externalPath: lower as FilePath, cleanupPolicy: 'manual' })
+        expect(second.id).toBe(first.id)
+        expect(second.cleanupPolicy).toBe('manual')
+      }
+    )
+
+    it.skipIf(process.platform === 'linux')(
+      'does not downgrade manual to delete_when_unreferenced through the case-collision peer reuse path',
+      async () => {
+        const upper = path.join(tmp, 'NODOWNGRADE.txt')
+        const lower = path.join(tmp, 'nodowngrade.txt')
+        await writeFile(upper, 'x')
+        const first = await ensureExternal(deps, { externalPath: upper as FilePath, cleanupPolicy: 'manual' })
+        expect(first.cleanupPolicy).toBe('manual')
+        const second = await ensureExternal(deps, {
+          externalPath: lower as FilePath,
+          cleanupPolicy: 'delete_when_unreferenced'
+        })
+        expect(second.id).toBe(first.id)
+        expect(second.cleanupPolicy).toBe('manual')
+      }
+    )
   })
 
   describe('ensureExternal canonical derivation', () => {
