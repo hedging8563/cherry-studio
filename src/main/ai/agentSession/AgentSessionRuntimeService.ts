@@ -1,5 +1,6 @@
 import { agentService } from '@data/services/AgentService'
 import { agentSessionMessageService } from '@data/services/AgentSessionMessageService'
+import { agentSessionService } from '@data/services/AgentSessionService'
 import { loggerService } from '@logger'
 import { serializeError } from '@main/ai/utils/serializeError'
 import { application } from '@main/core/application'
@@ -479,6 +480,16 @@ export class AgentSessionRuntimeService extends BaseService {
     return toolApprovalRegistry.dispatch(approvalId, decision)
   }
 
+  async prewarmSession(sessionId: string): Promise<void> {
+    const driver = await this.resolveSessionDriver(sessionId)
+    await driver?.prewarmSession?.(sessionId)
+  }
+
+  async closeSessionWarm(sessionId: string): Promise<void> {
+    const driver = await this.resolveSessionDriver(sessionId)
+    await driver?.closeSessionWarm?.(sessionId)
+  }
+
   protected onStop(): void {
     this.closeAll()
     toolApprovalRegistry.clear('agent-session-runtime-stop')
@@ -491,6 +502,14 @@ export class AgentSessionRuntimeService extends BaseService {
 
   private isCurrentEntry(entry: AgentSessionRuntimeEntry): boolean {
     return this.entries.get(entry.sessionId) === entry
+  }
+
+  private async resolveSessionDriver(sessionId: string) {
+    const session = await agentSessionService.getById(sessionId)
+    if (!session?.agentId) return undefined
+    const agent = await agentService.getAgent(session.agentId)
+    if (!agent) return undefined
+    return runtimeDriverRegistry.getAgentSessionDriver(agent.type)
   }
 
   private async ensureConnection(entry: AgentSessionRuntimeEntry): Promise<boolean> {

@@ -8,6 +8,9 @@ const mocks = vi.hoisted(() => ({
   findPendingAssistantMessageIds: vi.fn(),
   markMessagesError: vi.fn(),
   maybeRenameAgentSession: vi.fn(),
+  getSessionById: vi.fn(),
+  getAgent: vi.fn(),
+  onAgentUpdated: vi.fn(),
   applicationGet: vi.fn(),
   startRuntimeTurn: vi.fn(),
   pauseRuntimeTurn: vi.fn(),
@@ -27,6 +30,14 @@ vi.mock('@data/services/AgentSessionMessageService', () => ({
 
 vi.mock('@main/services/TopicNamingService', () => ({
   topicNamingService: { maybeRenameAgentSession: mocks.maybeRenameAgentSession }
+}))
+
+vi.mock('@data/services/AgentSessionService', () => ({
+  agentSessionService: { getById: mocks.getSessionById }
+}))
+
+vi.mock('@data/services/AgentService', () => ({
+  agentService: { getAgent: mocks.getAgent, onAgentUpdated: mocks.onAgentUpdated }
 }))
 
 vi.mock('@main/core/application', () => ({
@@ -121,6 +132,9 @@ describe('AgentSessionRuntimeService', () => {
     mocks.getLastRuntimeResumeToken.mockReturnValue(null)
     mocks.findPendingAssistantMessageIds.mockReturnValue([])
     mocks.markMessagesError.mockReturnValue(undefined)
+    mocks.getSessionById.mockResolvedValue({ id: 'session-1', agentId: 'agent-1' })
+    mocks.getAgent.mockResolvedValue({ id: 'agent-1', type: 'test-runtime' })
+    mocks.onAgentUpdated.mockReturnValue(() => undefined)
     mocks.applicationGet.mockImplementation((name: string) => {
       if (name === 'AiStreamManager') {
         return {
@@ -1542,6 +1556,43 @@ describe('AgentSessionRuntimeService', () => {
     )
     expect(entry.status).toBe('idle')
     expect(entry.lastTerminalStatus).toBe('error')
+  })
+
+  describe('driver warmup boundary', () => {
+    it('delegates prewarm and warm-close to the owning runtime driver', async () => {
+      const prewarmSession = vi.fn()
+      const closeSessionWarm = vi.fn()
+      runtimeDriverRegistry.register({
+        type: 'test-runtime',
+        capabilities: ['agent-session'],
+        validateSession: vi.fn(),
+        listAvailableTools: vi.fn(),
+        connect: vi.fn(),
+        prewarmSession,
+        closeSessionWarm
+      } as any)
+      const service = new AgentSessionRuntimeService()
+
+      await service.prewarmSession('session-1')
+      await service.closeSessionWarm('session-1')
+
+      expect(prewarmSession).toHaveBeenCalledWith('session-1')
+      expect(closeSessionWarm).toHaveBeenCalledWith('session-1')
+    })
+
+    it('no-ops warmup for drivers without a warm capability', async () => {
+      runtimeDriverRegistry.register({
+        type: 'test-runtime',
+        capabilities: ['agent-session'],
+        validateSession: vi.fn(),
+        listAvailableTools: vi.fn(),
+        connect: vi.fn()
+      } as any)
+      const service = new AgentSessionRuntimeService()
+
+      await expect(service.prewarmSession('session-1')).resolves.toBeUndefined()
+      await expect(service.closeSessionWarm('session-1')).resolves.toBeUndefined()
+    })
   })
 
   it('abandons the roll and surfaces the error when the continuation placeholder save rejects (S5)', async () => {

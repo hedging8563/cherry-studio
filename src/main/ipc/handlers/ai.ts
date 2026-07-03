@@ -71,10 +71,10 @@ export const aiHandlers: IpcHandlersFor<typeof aiRequestSchemas> = {
 
   // ── Agent sessions & tasks — delegate to the owning services. ──
   'ai.prewarm_agent_session': async ({ sessionId }) => {
-    await application.get('ClaudeCodeWarmQueryManager').prewarmAgentSession(sessionId)
+    await application.get('AgentSessionRuntimeService').prewarmSession(sessionId)
   },
   'ai.close_agent_session_warm': async ({ sessionId }) => {
-    application.get('ClaudeCodeWarmQueryManager').closeAgentSessionWarm(sessionId)
+    await application.get('AgentSessionRuntimeService').closeSessionWarm(sessionId)
   },
   // The continuation dispatch streams to the caller window, so it needs that window's WebContents.
   'ai.respond_tool_approval': (payload, { senderId }) =>
