@@ -1,6 +1,6 @@
 /**
  * Idle-gated interval tick + debounced nudge coalescing for FileManager's
- * entry-cleanup wiring (docs/references/file/file-entry-cleanup-queue.md
+ * entry-cleanup wiring (docs/references/file/file-entry-cleanup.md
  * Task 6). Uses a light instantiate-and-spy harness rather than the
  * DB-backed integration harness (FileManager.integration.test.ts) — these
  * tests gate the TICK/DEBOUNCE logic only; the cleanup pass itself is

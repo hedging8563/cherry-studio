@@ -19,6 +19,7 @@ import { eq } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { danglingCache } from '../../danglingCache'
+import { canonicalizeExternalPath } from '../../utils/pathResolver'
 import { createVersionCacheImpl } from '../../versionCache'
 
 vi.mock('@application', async () => {
@@ -83,22 +84,6 @@ describe('entryCleanup', () => {
       updatedAt: ts
     })
     if (opts.withBlob !== false) await writeFile(path.join(filesDir, `${id}.txt`), 'x')
-  }
-
-  async function seedExternal(id: FileEntryId, policy: CleanupPolicy, opts: { ageMs?: number } = {}): Promise<void> {
-    const ts = Date.now() - (opts.ageMs ?? 2 * HOUR)
-    await dbh.db.insert(fileEntryTable).values({
-      id,
-      origin: 'external',
-      name: 'ext',
-      ext: 'txt',
-      size: null,
-      externalPath: `/abs/${id}.txt`,
-      cleanupPolicy: policy,
-      deletedAt: null,
-      createdAt: ts,
-      updatedAt: ts
-    })
   }
 
   async function seedRef(fileEntryId: FileEntryId): Promise<void> {
@@ -209,12 +194,35 @@ describe('entryCleanup', () => {
     expect(fileEntryService.findById(id)).toBeNull()
   })
 
-  it('reclaims external auto entries DB-only', async () => {
+  it('reclaims external auto entries DB-only, leaving the on-disk file untouched', async () => {
     const id = nthId(6)
-    await seedExternal(id, 'delete_when_unreferenced')
+    const externalDir = await mkdtemp(path.join(tmpdir(), 'cherry-fm-entrycleanup-external-'))
+    const realFile = path.join(externalDir, 'user-file.txt')
+    await writeFile(realFile, 'user data')
+    const externalPath = canonicalizeExternalPath(realFile)
+    const ts = Date.now() - 2 * HOUR
+    await dbh.db.insert(fileEntryTable).values({
+      id,
+      origin: 'external',
+      name: 'ext',
+      ext: 'txt',
+      size: null,
+      externalPath,
+      cleanupPolicy: 'delete_when_unreferenced',
+      deletedAt: null,
+      createdAt: ts,
+      updatedAt: ts
+    })
+
     const report = await runEntryCleanup(makeDeps())
+
     expect(report.deleted).toBe(1)
     expect(fileEntryService.findById(id)).toBeNull()
+    // The user's on-disk file must never be touched for external entries —
+    // cleanup here is DB-only.
+    await expect(stat(realFile)).resolves.toBeDefined()
+
+    await rm(externalDir, { recursive: true, force: true })
   })
 
   it('skips entries holding a temp-session ref and counts skippedTempRefs', async () => {

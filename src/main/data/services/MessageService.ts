@@ -1485,7 +1485,7 @@ export class MessageService {
    * so the single-root invariant holds — and clears `activeNodeId`.
    */
   clearTopicMessages(topicId: string): { deletedIds: string[] } {
-    return application.get('DbService').withWriteTx((tx) => {
+    const result = application.get('DbService').withWriteTx((tx) => {
       const rootId = this.getRootMessageIdTx(tx, topicId)
 
       const rows = tx
@@ -1505,6 +1505,16 @@ export class MessageService {
       logger.info('Cleared topic messages', { topicId, count: deletedIds.length })
       return { deletedIds }
     })
+
+    // Best-effort GC nudge — cleanup is owned by FileManager's interval;
+    // absence of the service (tests, shutdown) must never fail the delete.
+    try {
+      application.get('FileManager').scheduleCleanup()
+    } catch {
+      /* lifecycle unavailable — interval pass will cover it */
+    }
+
+    return result
   }
 
   /**
