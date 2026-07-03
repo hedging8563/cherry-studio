@@ -540,7 +540,7 @@ When an external file does not exist on disk (or is inaccessible), the correspon
 - **Active push**: when a business module creates a watcher via `createDirectoryWatcher()`, the factory auto-wires add/unlink events into DanglingCache
 - **Side effect**: FileManager's own read/stat/write operations also update the cache on success/failure
 
-**UI semantics**: dangling entries show a failed style in the UI (grayscale, icon marker), but are **not auto-cleaned**—the ref association chain is preserved; the user can explicitly "Remove from library" or attempt to re-point.
+**UI semantics**: dangling entries show a failed style in the UI (grayscale, icon marker), but dangling state itself never triggers cleanup—the ref association chain is preserved. `manual` entries require the user to explicitly "Remove from library" or attempt to re-point; `delete_when_unreferenced` entries are instead reclaimed by the ref-count-driven cleanup pass ([file-entry-cleanup.md](./file-entry-cleanup.md)) regardless of presence.
 
 ---
 
@@ -1139,7 +1139,7 @@ export const danglingCache = new DanglingCache()
 
 ### 11.2 State Model
 
-DanglingCache exposes lazy, query-driven presence checks only. There is no cleanup-only recheck path because dangling external entries are not auto-deleted (§7.2). If a future explicit user workflow needs a strict re-stat escape hatch, add it with that concrete caller and document the user-visible action.
+DanglingCache exposes lazy, query-driven presence checks only. There is no cleanup-only recheck path because dangling state never drives deletion — `manual` entries are not auto-deleted (§7.2), and the cleanup pass for `delete_when_unreferenced` entries keys on ref count and grace window, not presence ([file-entry-cleanup.md](./file-entry-cleanup.md)). If a future explicit user workflow needs a strict re-stat escape hatch, add it with that concrete caller and document the user-visible action.
 
 ```typescript
 type DanglingState = 'present' | 'missing' | 'unknown'
@@ -1274,7 +1274,7 @@ async function batchGetDanglingStates(ids: FileEntryId[]): Promise<Record<FileEn
 
 **Freshness guarantee**: for any path the caller queries, cached state is never older than the TTL. Paths that are never queried may stay stale indefinitely — but by construction, no consumer is looking at them, so the staleness has no user-visible impact.
 
-**Why no background sweep**: a periodic background re-validation across all cached entries was considered and rejected. See [§12 Key Design Decisions](#12-key-design-decisions). The short version: FS IO cost would scale with total entry count instead of query frequency, and dangling entries are never auto-deleted, so stale presence state should be corrected at use/query time rather than by a hidden global scanner.
+**Why no background sweep**: a periodic background re-validation across all cached entries was considered and rejected. See [§12 Key Design Decisions](#12-key-design-decisions). The short version: FS IO cost would scale with total entry count instead of query frequency, and deletion is never driven by dangling state (`manual` entries require explicit action; auto-policy cleanup keys on ref count), so stale presence state should be corrected at use/query time rather than by a hidden global scanner.
 
 **Known residual case — stale `'present'` with `refs > 0`**: if an external file is deleted outside Cherry, without any watcher or ops observation to signal it, and no UI ever queries `getDanglingState` for that entry, the cache stays `'present'` past TTL boundaries (first query after TTL will re-stat and fix). Business services that depend on referenced files MUST re-validate at use time (read will surface ENOENT anyway); DanglingCache is a UI/presence helper, not a correctness boundary.
 
@@ -1404,7 +1404,7 @@ Every ad-hoc `if (entry.origin === 'internal')` / `=== 'external'` in the codeba
 | DanglingCache participation | `DanglingCache.check` returns `'present'` for internal; consider where the new variant falls on the `present/missing/unknown` axis |
 | `permanentDelete` semantics | Does it touch physical files? Just DB? Refer to §6 and architecture.md §3.4 |
 | Orphan sweep scope | §10 scans `origin='internal'` UUID files; does the new variant have a sweepable disk presence? |
-| Explicit cleanup semantics | §7.2 forbids automatic dangling-entry deletion; decide whether the new origin is preserved, reported, or removable only through an explicit user/caller action |
+| Explicit cleanup semantics | §7.2 forbids dangling-state-driven automatic deletion of `manual` entries (auto-policy entries are reclaimed by the ref-count-driven cleanup pass — [file-entry-cleanup.md](./file-entry-cleanup.md)); decide whether the new origin is preserved, reported, or removable only through an explicit user/caller action |
 | IPC dispatch applicability | architecture.md §3.3 tables per method — does each method make sense for the new variant? |
 
 ### 13.5 UX Layer
