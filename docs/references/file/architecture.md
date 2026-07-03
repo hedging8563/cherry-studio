@@ -864,7 +864,7 @@ To avoid the governance pitfall of "added a sourceType but forgot to wire up som
 | 2 | `src/shared/data/types/file/ref/index.ts` | Add the variant to `allSourceTypes` (type aggregation) + `FileRefSchema` discriminated union | Type system narrow failure |
 | 3 | `src/main/data/db/schemas/*` | Add the dedicated FK-constrained association table | Migration + schema tests |
 | 4 | Owning business service/migrator | Write/copy/delete relationship rows directly; use FK cascade for source and `file_entry` deletion | Unit/integration tests |
-| 5 | `FileRefService` | Add the table to read/ref-count aggregation only | DataApi + sweep tests |
+| 5 | `FileRefService` | Add the table to read/ref-count aggregation only — the registry-driven cleanup anti-join (`persistentRefAbsenceConditions`) picks it up automatically; the coverage test fails if the registry entry is missing | DataApi + sweep tests |
 
 **Design intent**:
 

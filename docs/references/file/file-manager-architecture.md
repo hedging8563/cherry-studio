@@ -708,19 +708,21 @@ Three layers of protection, with each layer as a fallback for the next:
 +-------------------------------------------------------+
 | Layer 3: on-demand DB orphan sweep                    |
 | prune temp-session refs whose file_entry is missing   |
-| report active file_entry rows with zero refs          |
+| report zero-ref manual entries                        |
+| reclaim zero-ref delete_when_unreferenced entries     |
+| via the cleanup pass                                  |
 +-------------------------------------------------------+
 ```
 
-Layer 3 is not a generic persistent-source reconciler. Persistent association rows are FK-constrained and should disappear through Layer 1 / Layer 2 cascades; the sweep only handles the non-persistent `temp_session` cache and reporting.
+Layer 3 is not a generic persistent-source reconciler. Persistent association rows are FK-constrained and should disappear through Layer 1 / Layer 2 cascades; the sweep handles the non-persistent `temp_session` cache, reports `manual` zero-ref entries, and reclaims `delete_when_unreferenced` zero-ref entries via the cleanup pass described in [file-entry-cleanup.md](./file-entry-cleanup.md).
 
 ### 7.1 No-Reference Entry Policy
 
 The default stance — *FileEntry is preserved even when no business refs point at it* — is chosen so the user never loses a file they (or Cherry) bothered to track merely because the original consumer got deleted. A UI surface may show an "unreferenced" marker for user-triggered cleanup.
 
-There are **no automatic deletion exceptions**. Even an external entry that is currently missing and has zero refs is still a user-visible library record: it may represent a temporarily unmounted drive, a file the user wants to re-link later, or simply a stale record the user should remove explicitly. The file module may report these rows, but it must not delete them without an explicit user/caller action.
+Automatic deletion applies **only** to entries whose `cleanup_policy = 'delete_when_unreferenced'` (see [file-entry-cleanup.md](./file-entry-cleanup.md)); `manual` entries have no automatic deletion exceptions. Even an external `manual` entry that is currently missing and has zero refs is still a user-visible library record: it may represent a temporarily unmounted drive, a file the user wants to re-link later, or simply a stale record the user should remove explicitly. The file module may report these rows, but it must not delete them without an explicit user/caller action.
 
-**Policy matrix by `(origin, dangling state, refs)`**:
+**Policy matrix by `(origin, dangling state, refs)`**: the rows below describe `manual`-policy behavior. A `delete_when_unreferenced` entry is instead reclaimed once it clears the grace window with zero refs — see [file-entry-cleanup.md §5](./file-entry-cleanup.md#5-cleanup-pass-reaper).
 
 | origin | dangling state | refs | Policy |
 |---|---|---|---|
@@ -732,7 +734,7 @@ There are **no automatic deletion exceptions**. Even an external entry that is c
 
 ### 7.2 No Automatic Dangling-External Cleanup
 
-Dangling external entries are never deleted automatically by a scheduler, startup task, or `runSweep()` policy pass. Cleanup is explicit:
+This section applies to `manual`-policy entries. Dangling external `manual` entries are never deleted automatically by a scheduler, startup task, or `runSweep()` policy pass — deletion of `delete_when_unreferenced` entries is handled by the separate cleanup pass in [file-entry-cleanup.md](./file-entry-cleanup.md), and is driven by ref count and grace window, not dangling state. Cleanup for `manual` entries is explicit:
 
 - **User action**: FilesPage or a cleanup UI calls the external-entry deletion path (labelled "Remove from library") for selected rows.
 - **Business action**: a business service that owns a reference may decide how to handle a missing file in its own workflow (prompt, re-link, remove ref, etc.).
@@ -749,7 +751,7 @@ Consequences:
 - No persisted "missing since" timestamp or time-based cleanup query.
 - No cleanup-verification bypass around DanglingCache TTL.
 - No cleanup-specific observability event.
-- No `('external', 'missing', 0)` automatic deletion branch in Layer 3. Layer 3 remains temp-session ref pruning plus orphan-entry reporting.
+- No `('external', 'missing', 0)` automatic deletion branch keyed on dangling state. Layer 3's reporting sub-path remains temp-session ref pruning plus zero-ref reporting for `manual` entries; `delete_when_unreferenced` entries are instead reclaimed by the policy-driven cleanup pass (file-entry-cleanup.md), independent of dangling state.
 
 ---
 
@@ -924,7 +926,7 @@ interface IFileUploadService {
 
 ### 10.1 Positioning
 
-Orphan sweep is **explicitly triggered via the `File_RunSweep` IPC channel** — there is no startup auto-run. FileManager exposes a single `runSweep()` method for cleanup UI/caller-initiated flows; it runs both the FS-level pass (§10) and the DB-level pass (§7 Layer 3) concurrently and returns a single `OrphanReport` once both settle.
+Orphan sweep is **explicitly triggered via the `File_RunSweep` IPC channel** — there is no startup auto-run for the FS-level pass (§10) or the DB-level report pass (§7 Layer 3). FileManager exposes a single `runSweep(params?: { confirmed?: boolean })` method for cleanup UI/caller-initiated flows: it first runs the entry-cleanup pass (auto-run separately on init/interval/delete-nudge — see [file-entry-cleanup.md §5](./file-entry-cleanup.md#5-cleanup-pass-reaper)), then runs the FS-level pass and the DB-level report pass concurrently, folding the cleanup pass's own summary into `counts.entryCleanup`, and returns a single `OrphanReport` once all three settle.
 
 ```typescript
 protected override async onInit(): Promise<void> {
@@ -933,18 +935,29 @@ protected override async onInit(): Promise<void> {
   await this.deps.danglingCache.initFromDb()
   // IPC handlers, including `File_RunSweep`, are registered here.
   this.registerIpcHandlers()
+  // Entry-cleanup pass auto-runs here (previous-session backlog), on a
+  // 30min idle-gated interval, and on a debounced delete-flow nudge —
+  // independently of `runSweep`. See file-entry-cleanup.md §5.5.
+  void this.runEntryCleanup()
+  this.registerInterval(() => this.entryCleanupTick(), FileManager.CLEANUP_INTERVAL_MS)
 }
 
-async runSweep(): Promise<OrphanReport> {
-  // Two concurrent passes:
-  //   1. FS-level file sweep (§10): scan {userData}/Data/Files/* for
+async runSweep(params: { confirmed?: boolean } = {}): Promise<OrphanReport> {
+  // Three passes, cleanup first:
+  //   1. Entry-cleanup pass (file-entry-cleanup.md §5): reclaims zero-ref
+  //      `delete_when_unreferenced` entries; `params.confirmed` bypasses
+  //      its safety threshold. Runs first so the DB report below doesn't
+  //      re-report entries it just reclaimed.
+  //   2. FS-level file sweep (§10): scan {userData}/Data/Files/* for
   //      orphans not present in the file_entry snapshot.
-  //   2. DB-level temp-session ref prune + entry report (§7 Layer 3):
+  //   3. DB-level temp-session ref prune + entry report (§7 Layer 3):
   //      prune cache refs whose file_entry is missing, then report
-  //      unreferenced active entries.
-  // Each branch settles independently with its own error capture. A DB
+  //      unreferenced `manual` entries.
+  // Passes 2/3 settle independently with their own error capture. A DB
   // failure dominates as `failed`; FS-side partial/aborted/failed outcomes
-  // degrade the umbrella report to `partial` via `fsSweepIssue`.
+  // degrade the umbrella report to `partial` via `fsSweepIssue`. The
+  // cleanup pass's own outcome rides in `counts.entryCleanup` and never
+  // changes the umbrella `outcome`.
 }
 ```
 
@@ -1056,9 +1069,11 @@ Every sweep run emits one structured log record through `loggerService` — `inf
 }
 ```
 
-The DB-side sweep emits a parallel record under `event: 'orphan-sweep'`. Its current outcomes are `completed` or `failed`: it prunes temp-session refs whose `file_entry` is missing, then reports active entries with zero refs. The shared `partial` wire branch remains for compatibility, but there is no generic per-source checker pass.
+The DB-side sweep emits a parallel record under `event: 'orphan-sweep'`. Its current outcomes are `completed` or `failed`: it prunes temp-session refs whose `file_entry` is missing, then reports `manual` entries with zero refs. The shared `partial` wire branch remains for compatibility, but there is no generic per-source checker pass.
 
-These two records are the single source of truth for post-hoc diagnosis. No separate metrics pipeline is needed — at most two records per user-triggered sweep run is a trivial volume for log aggregation.
+The entry-cleanup pass (§7.1, [file-entry-cleanup.md §5.6](./file-entry-cleanup.md#56-failure-handling--observability)) emits a third, independent record under `event: 'file-entry-cleanup'` — `info` on `completed`, `warn` on `aborted`, `error` on `failed` — covering candidate/deleted counts and skip/unlink-failure breakdowns for the `delete_when_unreferenced` reclaim path. It fires on its own triggers (init, idle-gated interval, delete-flow nudge) in addition to running as the first of `runSweep`'s three passes (§10.1).
+
+These three records are the single source of truth for post-hoc diagnosis. No separate metrics pipeline is needed — at most three records per user-triggered sweep run is a trivial volume for log aggregation.
 
 ### 10.6 DanglingCache Initialization
 
