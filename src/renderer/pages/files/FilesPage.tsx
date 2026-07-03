@@ -123,7 +123,11 @@ async function requestBatchedInternalEntryCreates(paths: readonly string[]): Pro
   const results = await Promise.all(
     chunks.map((chunk) =>
       ipcApi.request('file.batch_create_internal_entries', {
-        items: chunk.map((path) => ({ source: 'path' as const, path }))
+        items: chunk.map((path) => ({
+          source: 'path' as const,
+          path,
+          cleanupPolicy: 'delete_when_unreferenced' as const
+        }))
       })
     )
   )

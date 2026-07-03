@@ -120,7 +120,11 @@ export function usePaintingComposerInputFiles({ paintingId, inputFiles, files, s
           continue
         }
         try {
-          const entry = await window.api.file.createInternalEntry({ source: 'path', path: file.path as FilePath })
+          const entry = await window.api.file.createInternalEntry({
+            source: 'path',
+            path: file.path as FilePath,
+            cleanupPolicy: 'delete_when_unreferenced'
+          })
           cache.set(file.fileTokenSourceId, entry)
           entries.push(entry)
         } catch (error) {

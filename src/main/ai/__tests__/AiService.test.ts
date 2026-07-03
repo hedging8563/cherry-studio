@@ -224,7 +224,11 @@ describe('AiService', () => {
       }
     ])
 
-    expect(createInternalEntry).toHaveBeenCalledWith({ source: 'base64', data: 'data:image/png;base64,abc123' })
+    expect(createInternalEntry).toHaveBeenCalledWith({
+      source: 'base64',
+      data: 'data:image/png;base64,abc123',
+      cleanupPolicy: 'delete_when_unreferenced'
+    })
     expect(result).toEqual({ files: [fileEntry] })
   })
 
@@ -702,14 +706,16 @@ describe('imageInputEntryParams', () => {
   it('maps a base64 data URL to a base64 entry', () => {
     expect(imageInputEntryParams('data:image/png;base64,AAAA')).toEqual({
       source: 'base64',
-      data: 'data:image/png;base64,AAAA'
+      data: 'data:image/png;base64,AAAA',
+      cleanupPolicy: 'delete_when_unreferenced'
     })
   })
 
   it('maps an http(s) URL to a url entry (preserves the inputImages URL contract)', () => {
     expect(imageInputEntryParams('https://cdn.example.com/in.png')).toEqual({
       source: 'url',
-      url: 'https://cdn.example.com/in.png'
+      url: 'https://cdn.example.com/in.png',
+      cleanupPolicy: 'delete_when_unreferenced'
     })
   })
 })
@@ -724,12 +730,11 @@ describe('AiService.generateImage — custom async transport (job path)', () => 
     } as never)
   }
 
-  it('enqueues the job, returns its output files, and cleans up the temp input copies', async () => {
+  it('enqueues the job, returns its output files, and classifies the temp input copy for GC reclaim', async () => {
     const service = createService()
     stubResolution(service)
 
     const createInternalEntry = vi.fn().mockResolvedValue({ id: 'in-1' })
-    const permanentDelete = vi.fn().mockResolvedValue(undefined)
     const outputFiles = [{ id: 'out-1', origin: 'internal', ext: 'png', name: 'img', size: 3, createdAt: 0 }]
     const enqueue = vi.fn().mockReturnValue({
       id: 'job-1',
@@ -737,7 +742,7 @@ describe('AiService.generateImage — custom async transport (job path)', () => 
       finished: Promise.resolve({ status: 'completed', output: { files: outputFiles }, error: null })
     })
     mockApplicationGet.mockImplementation((name: string) => {
-      if (name === 'FileManager') return { createInternalEntry, permanentDelete }
+      if (name === 'FileManager') return { createInternalEntry }
       if (name === 'JobManager') return { enqueue, cancel: vi.fn() }
       return undefined
     })
@@ -754,15 +759,19 @@ describe('AiService.generateImage — custom async transport (job path)', () => 
       expect.objectContaining({ uniqueModelId: 'ppio::qwen-image', prompt: 'a cat', inputFileIds: ['in-1'] })
     )
     expect(result).toEqual({ files: outputFiles })
-    expect(permanentDelete).toHaveBeenCalledWith('in-1')
+    // No FileManager ref holds the temp input copy — it must be classified
+    // 'delete_when_unreferenced' so the cleanup pass reclaims it instead of
+    // relying on an ad-hoc delete.
+    expect(createInternalEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ cleanupPolicy: 'delete_when_unreferenced' })
+    )
   })
 
   it('maps a failed job snapshot to a thrown error', async () => {
     const service = createService()
     stubResolution(service)
     mockApplicationGet.mockImplementation((name: string) => {
-      if (name === 'FileManager')
-        return { createInternalEntry: vi.fn(), permanentDelete: vi.fn().mockResolvedValue(undefined) }
+      if (name === 'FileManager') return { createInternalEntry: vi.fn() }
       if (name === 'JobManager') {
         return {
           enqueue: vi.fn().mockReturnValue({
@@ -788,8 +797,7 @@ describe('AiService.generateImage — custom async transport (job path)', () => 
     controller.abort()
     const cancel = vi.fn().mockResolvedValue({ outcome: 'cancelled' })
     mockApplicationGet.mockImplementation((name: string) => {
-      if (name === 'FileManager')
-        return { createInternalEntry: vi.fn(), permanentDelete: vi.fn().mockResolvedValue(undefined) }
+      if (name === 'FileManager') return { createInternalEntry: vi.fn() }
       if (name === 'JobManager') {
         return {
           enqueue: vi.fn().mockReturnValue({
@@ -813,16 +821,13 @@ describe('AiService.generateImage — custom async transport (job path)', () => 
     expect(cancel).toHaveBeenCalledWith('job-1', expect.any(String))
   })
 
-  it('cleans up already-created temp input entries when setup fails before enqueue', async () => {
+  it('propagates the enqueue error unchanged when setup fails before enqueue', async () => {
     const service = createService()
     stubResolution(service)
-    const permanentDelete = vi.fn().mockResolvedValue(undefined)
     mockApplicationGet.mockImplementation((name: string) => {
       if (name === 'FileManager') {
-        return { createInternalEntry: vi.fn().mockResolvedValue({ id: 'in-1' }), permanentDelete }
+        return { createInternalEntry: vi.fn().mockResolvedValue({ id: 'in-1' }) }
       }
-      // enqueue fails after the temp input entry was already created → the entry is in
-      // no payload, so generateImageViaJob's setup catch must delete it.
       if (name === 'JobManager')
         return {
           enqueue: vi.fn().mockImplementation(() => {
@@ -840,7 +845,6 @@ describe('AiService.generateImage — custom async transport (job path)', () => 
         inputImages: ['data:image/png;base64,AAAA']
       })
     ).rejects.toThrow('enqueue boom')
-    expect(permanentDelete).toHaveBeenCalledWith('in-1')
   })
 })
 

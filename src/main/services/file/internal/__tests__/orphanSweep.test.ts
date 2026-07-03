@@ -563,7 +563,8 @@ describe('runFileSweep (FS-level)', () => {
       origin: 'internal',
       name: 'doomed-if-filter-creeps-in',
       ext: 'txt',
-      size: 1
+      size: 1,
+      cleanupPolicy: 'manual'
     })
     await writeFile(trashedPath, 'x')
     // 2) Move to trash via the service (sets deletedAt; row stays in DB).

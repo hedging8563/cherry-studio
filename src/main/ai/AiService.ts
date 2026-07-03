@@ -22,6 +22,7 @@ import type { FileEntry } from '@shared/data/types/file/fileEntry'
 import { type Model, parseUniqueModelId } from '@shared/data/types/model'
 import { IpcChannel } from '@shared/IpcChannel'
 import type { Base64String, UrlString } from '@shared/types/file/common'
+import type { CreateInternalEntryIpcParams } from '@shared/types/file/ipc'
 import { isEmbeddingModel, isFunctionCallingModel, isRerankModel } from '@shared/utils/model'
 import {
   type EmbeddingModelUsage,
@@ -35,7 +36,7 @@ import { isAgentSessionTopic } from './agentSession/topic'
 import { prepareChatMessages } from './messages/attachmentRouting'
 import { resolveMediaCapabilities } from './messages/messageCapabilities'
 import { resolveImageTransport } from './provider/custom/imageTransportRegistry'
-import { deleteImageInputEntries, imageGenerationJobHandler } from './provider/custom/tasks/imageGenerationJobHandler'
+import { imageGenerationJobHandler } from './provider/custom/tasks/imageGenerationJobHandler'
 import type { ImageGenerationJobOutput, ImageGenerationJobPayload } from './provider/custom/tasks/jobTypes'
 import { listModels as listModelsFromProvider } from './provider/listModels'
 import { Agent } from './runtime/aiSdk/Agent'
@@ -116,12 +117,10 @@ export interface AiImageResult {
  * image edits through the job: `data:` strings become base64 entries, `http(s)` URLs
  * become downloaded url entries. Either way the handler later reads the bytes by id.
  */
-export function imageInputEntryParams(
-  value: string
-): { source: 'base64'; data: Base64String } | { source: 'url'; url: UrlString } {
+export function imageInputEntryParams(value: string): CreateInternalEntryIpcParams {
   return value.startsWith('data:')
-    ? { source: 'base64', data: value as Base64String }
-    : { source: 'url', url: value as UrlString }
+    ? { source: 'base64', data: value as Base64String, cleanupPolicy: 'delete_when_unreferenced' }
+    : { source: 'url', url: value as UrlString, cleanupPolicy: 'delete_when_unreferenced' }
 }
 
 /**
@@ -548,7 +547,11 @@ export class AiService extends BaseService {
       })
     }
     const fileManager = application.get('FileManager')
-    const files = await Promise.all(dataUrls.map((data) => fileManager.createInternalEntry({ source: 'base64', data })))
+    const files = await Promise.all(
+      dataUrls.map((data) =>
+        fileManager.createInternalEntry({ source: 'base64', data, cleanupPolicy: 'delete_when_unreferenced' })
+      )
+    )
 
     return { files }
   }
@@ -571,43 +574,30 @@ export class AiService extends BaseService {
     const fileManager = application.get('FileManager')
     const jobManager = application.get('JobManager')
 
-    // Track every temp entry as it is created so a failure anywhere in setup
-    // (a later input download, the mask create, or enqueue itself) cleans up the
-    // entries already made — they aren't in any payload yet, so no handler would.
-    const createdEntryIds: string[] = []
     const persistInputImage = async (value: string): Promise<string> => {
       const entry = await fileManager.createInternalEntry(imageInputEntryParams(value))
-      createdEntryIds.push(entry.id)
       return entry.id
     }
 
-    let handle: JobHandle
-    try {
-      // allSettled (not all) so every create resolves before we decide: a partial
-      // failure still leaves `createdEntryIds` complete for the catch to clean up.
-      const settled = await Promise.allSettled((request.inputImages ?? []).map(persistInputImage))
-      const rejected = settled.find((r): r is PromiseRejectedResult => r.status === 'rejected')
-      if (rejected) throw rejected.reason
-      const inputFileIds = settled.length ? settled.map((r) => (r as PromiseFulfilledResult<string>).value) : undefined
-      const maskFileId = request.mask ? await persistInputImage(request.mask) : undefined
-      const requestSize = resolveImageRequestSize(request.size)
+    // allSettled (not all) so every create resolves before we decide whether to report a failure.
+    const settled = await Promise.allSettled((request.inputImages ?? []).map(persistInputImage))
+    const rejected = settled.find((r): r is PromiseRejectedResult => r.status === 'rejected')
+    if (rejected) throw rejected.reason
+    const inputFileIds = settled.length ? settled.map((r) => (r as PromiseFulfilledResult<string>).value) : undefined
+    const maskFileId = request.mask ? await persistInputImage(request.mask) : undefined
+    const requestSize = resolveImageRequestSize(request.size)
 
-      const payload: ImageGenerationJobPayload = {
-        uniqueModelId,
-        prompt: request.prompt,
-        n: request.n ?? 1,
-        ...(requestSize !== undefined && { size: requestSize }),
-        seed: request.seed,
-        ...(inputFileIds && { inputFileIds }),
-        ...(maskFileId && { maskFileId }),
-        providerParams
-      }
-      handle = jobManager.enqueue('image-generation.generate', payload)
-    } catch (error) {
-      // Setup failed before the job owns the payload — clean up what we created.
-      await deleteImageInputEntries(createdEntryIds)
-      throw error
+    const payload: ImageGenerationJobPayload = {
+      uniqueModelId,
+      prompt: request.prompt,
+      n: request.n ?? 1,
+      ...(requestSize !== undefined && { size: requestSize }),
+      seed: request.seed,
+      ...(inputFileIds && { inputFileIds }),
+      ...(maskFileId && { maskFileId }),
+      providerParams
     }
+    const handle: JobHandle = jobManager.enqueue('image-generation.generate', payload)
 
     // Reuse the existing IPC AbortController (ai.abort_image): when it fires,
     // cancel the job (which aborts the handler + remote task).
@@ -620,9 +610,6 @@ export class AiService extends BaseService {
       snapshot = await handle.finished
     } finally {
       signal?.removeEventListener('abort', onAbort)
-      // Backstop cleanup (the handler is the primary owner once it runs); also
-      // covers the in-process case where the job is cancelled while still pending.
-      await deleteImageInputEntries(createdEntryIds)
     }
 
     if (snapshot.status === 'completed') {
