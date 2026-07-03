@@ -102,6 +102,7 @@ LIMIT :batch   -- default 100 per pass
 
 - `deleted_at` is **not** filtered: a trashed zero-ref auto entry is reclaimed too (the user already discarded it, and trash auto-expiry is deferred).
 - The unique index `(file_entry_id, source_id, role)` on each ref table backs the `NOT EXISTS` probes; at desktop scale the query is single-digit ms. A partial index on `cleanup_policy = 'delete_when_unreferenced'` is the first cheap lever if it ever measures slow (§11).
+- The `NOT EXISTS` clauses MUST be generated from the `persistentFileRefTablesBySourceType` registry (`schemas/fileRelations.ts`), never hand-enumerated. A ref table missing from the anti-join makes its entire source's files look unreferenced — a catastrophe the fraction threshold (§5.3) cannot reliably catch (a source holding <50% of entries slips under it). Registry-driven generation plus a test asserting coverage of every registered table makes the omission structurally impossible.
 
 ### 5.2 Grace window
 
@@ -112,7 +113,15 @@ LIMIT :batch   -- default 100 per pass
 Same philosophy as the FS sweep's abort (`file-manager-architecture.md` §10.4), defending against classification/migration bugs:
 
 - candidates < 20 → always proceed;
-- otherwise, if candidates > 50% of all `file_entry` rows → abort the pass, delete nothing, `warn`-log with counts.
+- otherwise, if candidates > 50% of all `file_entry` rows → the **automatic** pass (init / interval / nudge, and unconfirmed `runSweep`) aborts, deletes nothing, and `warn`-logs with counts.
+
+Unlike the FS sweep — where half the disk suddenly lacking DB rows is almost certainly an upstream bug — this guard has a **legitimate trigger**: a user clearing most of their chats at once can push the candidate fraction past 50%, and since neither the numerator nor the denominator then moves, a bare abort would latch forever. The abort therefore must not be a dead end:
+
+- `runSweep()`'s report includes the pending auto-reclaim count so the cleanup UI can surface "N files pending cleanup".
+- An explicitly user-confirmed cleanup invocation (`confirmed` flag on the sweep/cleanup IPC surface) bypasses the fraction check; the per-candidate re-verification (§5.4) and batch limit still apply in full. The user already expressed deletion intent once (deleting the business objects) — this second confirmation is required only in the >50% tail.
+- Automatic passes keep re-evaluating every interval; once a confirmed drain (or library growth) brings the fraction back under threshold, automatic reclamation resumes on its own.
+
+The fraction threshold is thus the guard against *classification* bugs (migration mis-tagging, policy mis-assignment); the *coverage* bug class (a ref table missing from the anti-join) is handled structurally by registry-driven query generation (§5.1).
 
 ### 5.4 Per-candidate protocol
 
@@ -142,6 +151,7 @@ A failed candidate is logged and simply retried on the next pass — no attempt 
 {
   event: 'file-entry-cleanup',
   outcome: 'completed' | 'aborted' | 'failed',
+  confirmed: boolean,          // true for a user-confirmed drain (§5.3)
   candidates: number,
   deleted: number,
   skippedTempRefs: number,
@@ -205,7 +215,9 @@ Shipped in the same PR series:
   - entry younger than grace → skipped;
   - trashed (`deleted_at` set) auto entry → reclaimed;
   - external auto entry → row deleted, no FS touch;
-  - safety threshold → pass aborts, nothing deleted;
+  - safety threshold → automatic pass aborts, nothing deleted;
+  - over-threshold candidate set + `confirmed` invocation → drains (batched, per-candidate re-verified); automatic passes resume once under threshold;
+  - candidate query covers every table in `persistentFileRefTablesBySourceType` (coverage test);
   - batch limit respected; failed candidate retried next pass (idempotence).
 - **Policy lifecycle**: `ensureExternalEntry` reuse upgrades auto→manual and never downgrades; DataApi flip endpoint sets both directions.
 - **Migrators**: ref-backfilled files → auto; zero-ref survivors → manual.
@@ -246,4 +258,4 @@ Revisit the discovery mechanism only when measurement demands it, in this order:
 
 ## 12. Adding a New Persistent File Ref Source
 
-Unchanged from the existing checklist (`architecture.md` §5.2b): add the FK-constrained association table, join `FileRefService` aggregation and the unreferenced/persistent-count queries, add tests. The cleanup pass automatically covers any table included in those queries — there is no cleanup-specific registration step.
+Unchanged from the existing checklist (`architecture.md` §5.2b): add the FK-constrained association table, register it in `persistentFileRefTablesBySourceType`, join `FileRefService` aggregation and the unreferenced/persistent-count queries, add tests. Because the candidate query is generated from that registry (§5.1), the cleanup pass automatically covers any registered table — there is no cleanup-specific registration step, and the coverage test fails if registration is forgotten.
