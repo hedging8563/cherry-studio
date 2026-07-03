@@ -114,7 +114,7 @@
 - #20 junction/co-owned FK 不声明 optional，NOT NULL 列不可 SET_NULL。
 - #24 声明的 EntityReference 对应生成的 FK；#25 反向——**每个 DB FK 须被 owner contributor 声明**（防漏声明跨域 FK 如 `agent.model→user_model` 致拓扑无依赖边、omitted 动作不触发、悬空 FK 行）。
 
-**冻结与冲突默认**：#17 schema 深度冻结；#18 失败信息含定位字段；#21 natural-key/slot 聚合 conflictDefault 非 SKIP（设置类 preference/note 例外允许 SKIP，含 `platformSpecificKeys` 排除跨平台不兼容 key）。
+**冻结与冲突默认**：#17 schema 深度冻结；#18 失败信息含定位字段；#21 natural-key/slot 聚合 conflictDefault 非 SKIP（设置类 preference/note 例外允许 SKIP，含 `platformSpecificKeys` 排除跨平台不兼容 key）。#21 的 `deviation` payload 子类还覆盖 `platformSpecificKeys` scope 校验（仅 PREFERENCES 可声明 + glob 语法合法性）与 `polymorphicEntityMap` 路由值校验（值须为已知 BackupDomain 或 `excluded`）——三者共享 #21 编号、以 `deviation` 字段区分子类。
 
 ---
 
