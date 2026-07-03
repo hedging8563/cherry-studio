@@ -265,7 +265,7 @@ describe('AppShellTabBar', () => {
     const iconBox = icon?.parentElement
 
     expect(title).toHaveClass('font-normal')
-    expect(title).toHaveClass('text-xs')
+    expect(title).toHaveClass('text-(length:--font-size-body-xs)')
     expect(title).toHaveClass('leading-none')
     expect(title).not.toHaveClass('font-medium')
     expect(icon).toHaveAttribute('width', '14')
