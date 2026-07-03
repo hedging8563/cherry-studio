@@ -73,7 +73,7 @@ Files strictly follow their owning business object's lifecycle. Chat attachments
 ### 4.2 Policy transitions
 
 - **`ensureExternalEntry` reuse branch — upgrade-only**: when upserting hits an existing row, the call may upgrade `delete_when_unreferenced` → `manual` (caller passes manual intent) but must never downgrade `manual` → `delete_when_unreferenced`. A library file that gets `@`-mentioned in a chat must not silently become a cleanup candidate.
-- **Explicit flip**: the DataApi entry-update mutation exposes `cleanupPolicy`; explicit user/caller action may set either direction. This backs the future FilesPage "pin / save to library" action.
+- **Explicit flip**: a File IPC channel (`File_SetCleanupPolicy` → `FileManager.setCleanupPolicy`) exposes the flip — file-entry mutations live on File IPC, not DataApi (`files.ts` pins mutations as intentionally absent there); explicit user/caller action may set either direction. This backs the future FilesPage "pin / save to library" action.
 - `cleanup_policy` applies to **both origins**. Deleting an external entry is DB-only (the user's file is never touched), per existing `permanentDelete` semantics.
 
 ### 4.3 Renderer visibility
@@ -224,7 +224,7 @@ Shipped in the same PR series:
   - candidate query covers every table in `persistentFileRefTablesBySourceType` (coverage test);
   - idle gate: active user (< 60s idle) → tick skipped; idle → runs; > 2h since last completed pass → runs despite activity; init/nudge/confirmed paths unaffected by the gate;
   - batch limit respected; failed candidate retried next pass (idempotence).
-- **Policy lifecycle**: `ensureExternalEntry` reuse upgrades auto→manual and never downgrades; DataApi flip endpoint sets both directions.
+- **Policy lifecycle**: `ensureExternalEntry` reuse upgrades auto→manual and never downgrades; File IPC flip channel sets both directions.
 - **Migrators**: ref-backfilled files → auto; zero-ref survivors → manual.
 - **Integration**: deleting a topic eventually reclaims its attachments; a pinned (`manual`) file survives its business owner's deletion.
 

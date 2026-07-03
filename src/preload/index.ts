@@ -6,7 +6,7 @@ import type {
   UnifiedPreferenceMultipleResultType,
   UnifiedPreferenceType
 } from '@shared/data/preference/preferenceTypes'
-import type { FileEntry } from '@shared/data/types/file'
+import type { CleanupPolicy, FileEntry, FileEntryId } from '@shared/data/types/file'
 import type { FileMetadata } from '@shared/data/types/file/legacyFileMetadata'
 import type { SettingsPath } from '@shared/data/types/settingsPath'
 import { IpcChannel } from '@shared/IpcChannel'
@@ -188,6 +188,8 @@ const api = {
       ipcRenderer.invoke(IpcChannel.File_GetPhysicalPath, params),
     permanentDelete: (handle: FileHandle): Promise<void> => ipcRenderer.invoke(IpcChannel.File_PermanentDelete, handle),
     runSweep: (params?: { confirmed?: boolean }) => ipcRenderer.invoke(IpcChannel.File_RunSweep, params ?? {}),
+    setCleanupPolicy: (params: { id: FileEntryId; cleanupPolicy: CleanupPolicy }): Promise<FileEntry> =>
+      ipcRenderer.invoke(IpcChannel.File_SetCleanupPolicy, params),
     deleteExternalFile: (filePath: string) => ipcRenderer.invoke(IpcChannel.File_DeleteExternalFile, filePath),
     deleteExternalDir: (dirPath: string) => ipcRenderer.invoke(IpcChannel.File_DeleteExternalDir, dirPath),
     move: (path: string, newPath: string) => ipcRenderer.invoke(IpcChannel.File_Move, path, newPath),

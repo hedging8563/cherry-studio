@@ -161,6 +161,7 @@ export enum IpcChannel {
   File_GetPhysicalPath = 'file:getPhysicalPath',
   File_PermanentDelete = 'file:permanentDelete',
   File_RunSweep = 'file:runSweep',
+  File_SetCleanupPolicy = 'file:setCleanupPolicy',
   // DirectoryTreeBuilder primitive — top-level file-module surface, parallel
   // to the FileEntry channels above. See docs/references/file/directory-tree.md.
   File_TreeCreate = 'file:tree:create',
