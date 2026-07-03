@@ -13,7 +13,7 @@
 | 层 | 放什么 | 不放什么 |
 |---|---|---|
 | `schema`（Entity facts） | 表归属、引用事实、主键形态、聚合边界、file-ref source、JSON 软引用 | SET_NULL/DELETE_ROW 动作、导入顺序、恢复策略 |
-| `backupPolicy` | 省略引用 override、唯一键合并、列级 FIELD_MERGE、`platformSpecificKeys` | 数据库 I/O、文件操作、异步 hook |
+| `backupPolicy` | 省略引用 override、唯一键合并、列级 FIELD_MERGE（4 strategy 枚举：`remote-fills-local-null` / `remote-fills-local-empty` / `deep-merge` / `local-priority`）、`platformSpecificKeys` | 数据库 I/O、文件操作、异步 hook |
 | `operations`（可选） | 文件资源发现、beforeArchive、逐行 transform、afterImport、blob 恢复、cloneAggregate | 可用纯数据表达的事实和策略 |
 
 - contributor 是**冻结的常量对象**（非 class）：`export const TOPICS_CONTRIBUTOR = deepFreeze<BackupContributor>({ domain, schema, backupPolicy, operations })`。理由是纯数据 + 无状态纯函数 hook；`schema-only` 域 `operations: undefined` 天然支持；`deepFreeze` 保证 finalize 后不可变（strict mode 下任何 mutation 抛 TypeError）。
@@ -27,7 +27,9 @@
 
 **规则**：各域 contributor declaration **co-locate 在该域 owning module 的实际位置**（遵守 main-process 现有目录边界，不强制 `src/main/services/`），由业务域 owner 维护该域 entity facts（表归属/引用/聚合/file-ref/JSON 软引用）。
 
-- 路径：co-locate 在该域 owning module 实际位置。**per-domain 目录**（`<owning>/<domain>/backupContributor.ts`）为默认；**flat owning module**（多域 Service 同目录，如 `src/main/data/services/`）SHALL 用 per-domain 子目录（`<dir>/<domain>/backupContributor.ts`）或唯一文件名（`<dir>/backupContributor-<domain>.ts`），避免多域争用同一路径。合法位置示例（遵守 main-process 目录边界）：`src/main/services/<domain>/`（topics/agents 等 service 域）、`src/main/data/services/<domain>/`（data services，如 providers）、`src/main/features/knowledge/`（knowledge）、`src/main/ai/`（AI/agent）。每域可多文件拆分（如 KNOWLEDGE restoreResources 重 IO 可独立文件），测试就近放该域 `__tests__/`。
+- 路径：co-locate 在该域 owning module 实际位置。**per-domain 目录**（`<owning>/<domain>/backupContributor.ts`）为默认；**flat owning module**（多域 Service 同目录）SHALL 用 per-domain 子目录（`<dir>/<domain>/backupContributor.ts`）或唯一文件名（`<dir>/backupContributor-<domain>.ts`），避免多域争用同一路径。
+- **实际约定**：数据声明（表/列/引用/聚合事实）属 data 层，各 contributor **flat 放在 `src/main/data/services/backupContributor-<domain>.ts`**（避免 backup→business-module 逆向耦合）。两处真实例外：① `src/main/data/backupContributor-preferences.ts`（PREFERENCES 提到 `data/` 上一层）；② `src/main/services/translate/backupContributor.ts`（TRANSLATE_HISTORY 与其业务模块同目录）。
+- 位置示例（`features/` / `ai/` 等为**非绑定**的 co-location 示意，数据声明仍按上条归 data 层）：`src/main/data/services/backupContributor-topics.ts`（topics）、`backupContributor-providers.ts`（providers）、`backupContributor-knowledge.ts`（knowledge）、`backupContributor-agents.ts`（AI/agent）。每域可多文件拆分（如 KNOWLEDGE restoreResources 重 IO 可独立文件），测试就近放该域 `__tests__/`。
 - **backup 模块只持**：统一 barrel（`contributors/index.ts` 聚合 14 域导出）+ `ContributorManager` + registry + orchestrator。**纯类型 / context 类型 / deepFreeze / dbSchemaRefs / BackupDomain / ConflictStrategy 归 neutral layer**（`@main/data/db/backup/`，见下），backup 与各域 contributor 同向依赖。**不承载任何 domain-specific 表/列/聚合事实**——否则 domain facts 退回集中到 backup 模块，与下放目标矛盾。
 - 检查：`src/main/services/backup/contributors/` **SHALL 仅含** barrel（index.ts）/ finalize（ContributorManager）；**SHALL NOT 含** orchestrator（归 `src/main/services/backup/orchestrator/`）/ 纯类型 / context 类型 / deepFreeze（归 neutral layer `@main/data/db/backup/`）/ 域 schema/policy/operations declaration。
 
@@ -72,6 +74,14 @@
 | `identityKey` | `primaryKeys[root].columns`；**root 有 UNIQUE 约束（非 PK）时须含 UNIQUE 键**（防跨设备同值不同 UUID 撞 SQLite UNIQUE，如 `agent_workspace.path`/`tag.name`/`note(rootPath,path)`/`pin(entityType,entityId)`/`agent_global_skill.folderName`/`job_schedule(type,name)`） | PK 复合且 UNIQUE 键非全 PK |
 | `identityClass` | `primaryKeys[root].kind`：`uuid-v4`/`uuid-v7`→`uuid-entity`、`natural`/`composite`→`natural-key`；root 有 UNIQUE 约束（非 PK）→ `natural-key` | `slot`（预定义槽位，codegen 无法推断） |
 | `conflictDefault` | `uuid-entity`→`SKIP`；`natural-key`/`slot`→`FIELD_MERGE` | 偏离默认时（现网仅 preference/note 偏离为 SKIP，设置类例外，须 reason + 不变量 21） |
+
+> **FIELD_MERGE 列级合并策略**：`fieldMergePolicies` 的 `strategy` 取 **4 枚举**之一（`BackupContributorPolicy` 派生自 backup-architecture §6 policy）：
+> - `remote-fills-local-null` — 本地 null 时填远程值；
+> - `remote-fills-local-empty` — 本地 null / 空数组 / 默认骨架均视为缺失才填远程（防种子占位致备份凭证被吞）；
+> - `deep-merge` — 深度合并对象字段；
+> - `local-priority` — 本地非空时本地优先。
+>
+> **典型**：PROVIDERS `user_provider.apiKeys` / `authConfig` 用 `remote-fills-local-empty`——seeded provider 预置 `apiKeys=[]` 与非空 `authConfig` 骨架，`remote-fills-local-null` 会把它们当作"已有"而静默丢弃备份凭证；`remote-fills-local-empty` 把 `[]` / null / 空-骨架鉴权均视为缺失，保住本地可用 key、补入仅备份持有的 key（§6 "防丢 API key"）。
 | `members` | 域内指向 root 的 owning include references 源表（`viaColumn`=ref.column、`parent`=ref target，按拓扑序）；junction 表、跨域 ref、域内指向其它聚合根的 owning ref **不计入** | 需排除默认成员（如 self-ref 自引用） |
 
 `AggregateMember { table, viaColumn, cascade:'include'|'optional' }`：include=随根整体处理；optional=根冲突时仅置空。派生由 `finalize` 启动期完成，**不**在 hook 调用期。
@@ -115,7 +125,7 @@
 **重写边界按 ref 是否 required（非按是否 JSON）**：
 
 - **required ref**（target 缺失则功能损坏）——target 合并时**必须重写**：① DB owning FK（`agent_session.workspaceId → agent_workspace`，跨设备同 path 不同 uuid）；② **required JSON ref**（AGENTS：`agent_channel.workspace.workspaceId` / `job_schedule(type='agent.task').jobInputTemplate.workspace.workspaceId`，均为 `AgentSessionWorkspaceSource`），后者由 `jsonSoftReferences` 标 required 类参与 identity propagation——否则恢复看似成功（`foreign_key_check` 通过）但 channel/定时 task 引用悬空 workspace。
-- **tolerant ref**（`message.data.fileEntryId` 附件软引用、`file_ref.sourceType`）——target 合并/缺失时**不重写**，缺失仅降级 Toast + orphan 检测。
+- **tolerant ref**（`message.data.fileEntryId` 附件软引用、`chat_message_file_ref` / `painting_file_ref`）——target 合并/缺失时**不重写**，缺失仅降级 Toast + orphan 检测。
 - **optional ref**（如 `translate_history.sourceLanguage → translate_language`）——重写保留关联或按 optional 语义 SET_NULL（不可留悬空备份 uuid）。
 - **junction ref**（如 `entity_tag.tagId → tag`）——随 root cascade-prune，target 合并时 FK 一并重写。
 
@@ -185,7 +195,8 @@ export const TOPICS_CONTRIBUTOR = deepFreeze<BackupContributor>({
       // members 默认 = [message (viaColumn=topicId, include)]
     }],
     fileRefSourcePolicies: [
-      // file_ref.sourceType='chat_message' → ownerDomain=TOPICS
+      // chat_message_file_ref → ownerDomain=TOPICS; painting_file_ref → PAINTINGS
+      // (post-#16532 拆分：旧多态 file_ref 表已按 source 源域拆为显式 FK 表)
     ],
     jsonSoftReferences: [
       // message.data 含 fileEntryId 软引用 → tolerant
@@ -209,7 +220,7 @@ export const TOPICS_CONTRIBUTOR = deepFreeze<BackupContributor>({
 
 ### 框架与注册（capability `modular-backup-contributor`）
 - `proposal.md` — 本变更与 codex 版分歧的裁决（聚合边界、表穷尽归类、稳定主键、omitted 引用派生）。
-- `design.md` — 设计基线（三层分离、25 不变量矩阵、coverage、行级合并语义、A3 placement/lifecycle 裁决）。
+- `design.md` — 设计基线（三层分离、26 不变量矩阵、coverage、行级合并语义、A3 placement/lifecycle 裁决）。
 - `tasks.md` — 实施任务（T0 gate → T1 框架/codegen/registry → T2 14 域 declaration → T3 orchestrator 接入）。
 - `specs/modular-backup-contributor/spec.md` — BackupContributor 三层分离 interface 契约。
 - `specs/modular-backup-contributor/contributor-framework.md` — contributor 冻结常量对象 + deepFreeze + placement/ownership 边界（A3 修订源）。

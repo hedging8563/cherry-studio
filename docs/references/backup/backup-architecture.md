@@ -107,7 +107,7 @@ flowchart LR
 |---|---|---|
 | Entity facts（schema） | 表归属、引用事实、主键形态、聚合边界、file-ref source、JSON 软引用 | SET_NULL/DELETE_ROW 动作、导入顺序、恢复策略 |
 | Backup policy | 省略引用 override、唯一键合并 | 数据库 I/O、文件操作、异步 hook（remap/idStrategies 已移除） |
-| Operations | 文件资源发现、beforeArchive、逐行 transform、afterImport、blob 恢复、cloneAggregate | 可用纯数据表达的事实和策略 |
+| Operations | 文件资源发现、beforeArchive、逐行 transform、afterImport（in-tx FTS 重建）、afterCommit（post-tx cache reload / schedule re-arm）、blob 恢复、cloneAggregate | 可用纯数据表达的事实和策略 |
 
 > [!IMPORTANT]
 > **核心机制是 `schema.aggregates`（聚合边界）**，把 object-boundary SKIP/OVERWRITE/RENAME 从文字描述提升为静态可校验机制。
@@ -180,7 +180,7 @@ flowchart TB
 | 域类型 | 聚合边界注意点 |
 |---|---|
 | ASSISTANTS | RENAME 克隆时成员 assistantId 重映射到新根 PK |
-| AGENTS | agent_workspace/agent_channel 单表 renamable:false；agent_channel_task 是 junction（双 cascade FK）；**job_schedule.type='agent.task' row-scope 归 AGENTS**（natural-key `(type,name)`、FIELD_MERGE；Agent task 定义，否则设计性丢失用户 task）；job_schedule 按 `(type,name)` 合并时 `agent_channel_task.taskId`（→schedule id）须 identity propagation 重写到本地 canonical schedule id（§5.4）；afterImport 须 re-arm job_schedule timer（DB 导入不调 registerJobSchedule，否则 agent.task 不 fire 直到重启） |
+| AGENTS | agent_workspace/agent_channel 单表 renamable:false；agent_channel_task 是 junction（双 cascade FK）；**job_schedule.type='agent.task' row-scope 归 AGENTS**（natural-key `(type,name)`、FIELD_MERGE；Agent task 定义，否则设计性丢失用户 task）；job_schedule 按 `(type,name)` 合并时 `agent_channel_task.taskId`（→schedule id）须 identity propagation 重写到本地 canonical schedule id（§5.4）；afterCommit 须 re-arm job_schedule timer（DB 导入不调 registerJobSchedule，且 re-arm 须读 commit 后的最终 schedule 行集，故属 post-tx `afterCommit` 而非 in-tx `afterImport`，见 §7） |
 | FILE_STORAGE | restoreResources() 先于 DB 行导入，返回 skippedFileEntryIds；renamable:false，RENAME 退化为 SKIP |
 | PROVIDERS | 聚合 user_provider + user_model(providerId)；natural-key，默认 FIELD_MERGE（apiKeys/authConfig 列级合并，防丢 API key）；renamable:false（user_model.id 派生键） |
 
@@ -218,7 +218,7 @@ junction reference（`agent_skill` / `agent_channel_task`，不计入 members �
 
 `EntityGraphSchema`：`tables` / `references`（kind: optional|owning|junction）/ `primaryKeys`（kind: uuid-v4|uuid-v7|natural|composite|autoincrement(finalize 拒绝)，ambiguous 标注）——**composite 收紧**：仅忠实表达现有 schema fact（如 `preference[scope,key]` 配置槽、`entity_tag`/`agent_channel_task` 等 junction 复合 PK）；composite 表不作新 aggregate root 冲突策略（junction 只参与 FK/coverage 校验），新增 composite root 须 finalize 白名单 + 架构评审/ **`aggregates`**（`AggregateBoundary { root, renamable, [identityKey?], [identityClass?], [conflictDefault?], [members?] }`——除 `root` 与 `renamable` 外其余字段全部从 `references + primaryKeys` 派生，contributor 显式声明仅用于偏离默认）/ `fileRefSourcePolicies` / `jsonSoftReferences` / `rowScopes?`（共享表行分区，如 job_schedule.type='agent.task' 归 AGENTS）。派生规则：identityKey=root PK；identityClass=primaryKeys[root].kind：uuid-v4/v7→uuid-entity、natural/composite→natural-key（slot 须显式）；conflictDefault=identityClass 映射（uuid-entity→SKIP；natural-key/slot→FIELD_MERGE）；members=域内指向 root 的 owning include references 源表（junction 表与跨域 ref 不计入，不变量 14 拒绝漂移）。
 
-`BackupContributorPolicy`：`omittedReferenceOverrides`（仅例外，须绑定事实+非冗余+reason）、`uniqueMergeRules`、`fieldMergePolicies`（FIELD_MERGE 列级合并）、**`platformSpecificKeys?`**（仅 PREFERENCES：声明平台相关 key 模式，如 `shortcut.*` / `*.path` / `app.hardware_acceleration`，恢复时**排除**——不跨平台导入，避免不存在的路径/错误快捷键；portable key 正常 SKIP 补缺；具体清单由 PREFERENCES owner 提供。**finalize 校验**：key 模式合法（glob 语法）+ 仅 PREFERENCES 域可声明，非 PREFERENCES 声明则拒绝）。**不含** restoreRemap / idStrategies（over-design，移除）。
+`BackupContributorPolicy`：`omittedReferenceOverrides`（仅例外，须绑定事实+非冗余+reason）、`uniqueMergeRules`、`fieldMergePolicies`（FIELD_MERGE 列级合并，每列声明一个 `FieldMergeStrategy`，四选一：`remote-fills-local-null` 本地该列为 NULL 才用远程填、`remote-fills-local-empty` 本地该列为 NULL 或空值如 `[]`/`{}`/空串才用远程填、`deep-merge` 递归深合并对象、`local-priority` 本地优先不为空即保留）、**`platformSpecificKeys?`**（仅 PREFERENCES：声明平台相关 key 模式，如 `shortcut.*` / `*.path` / `app.hardware_acceleration`，恢复时**排除**——不跨平台导入，避免不存在的路径/错误快捷键；portable key 正常 SKIP 补缺；具体清单由 PREFERENCES owner 提供。**finalize 校验**：key 模式合法（glob 语法）+ 仅 PREFERENCES 域可声明，非 PREFERENCES 声明则拒绝）。**PROVIDERS 用例**：`user_provider.apiKeys` 与 `user_provider.authConfig` 用 `remote-fills-local-empty`——本地 seed 的 `[]` 空数组 / skeleton 对象视为 missing，远程备份若有非空凭证则填入，从而保留用户 backed-up 的 API key 不被本地空 seed 覆盖（与 §3.5 / §5 PROVIDERS「FIELD_MERGE 防丢 API key」一致）。**不含** restoreRemap / idStrategies（over-design，移除）。
 
 > [!WARNING]
 > **类型入口**：`DbTableName` / `DbColumnName` 必须来自 Drizzle codegen，不能靠手写 as 认证。`DbColumnName` 是 Drizzle **property name（camelCase，如 topicId / providerId / fileEntryId）**；物理 SQLite 列由 DbService `casing:'snake_case'` 自动转 snake_case（topic_id）。backup 全程走 drizzle builder（`BackupScopedDb` 不暴露 run/raw/Client），drizzle 自动处理 casing 转换，故无裸 SQL 列名风险。
@@ -303,10 +303,14 @@ flowchart TB
 
 注册到消费链路：各域 contributor 声明 **co-locate 在 owning domain module** → ContributorManager（non-lifecycle named singleton）经统一 barrel 收集 → finalize 启动期校验 26 不变量（不连 DB）→ 通过则产出 BackupRegistry 供 orchestrator 查询，失败则启动中断并报 domain/table/owner/不变量。`BackupService`（WhenReady）于 `onInit()` 调 `contributorManager.getRegistry()` **惰性触发** finalize（首次同步 finalize + 深度冻结 + 缓存，幂等），等价于原 `@DependsOn` 排序但无需把纯静态 finalizer 提升为 lifecycle service；DB 实际表覆盖由 coverage test（CI）兜底，故 finalize 不连 DB。
 
-各 hook 调用时机与缺省：collectFileResources（导出前收集文件/缺省空集）、beforeArchive（剥离后仅改备份副本/no-op）、transformRow（导入前/原行，返回 null 跳过该行）、afterImport（域导入后 FTS 重建/no-op）、restoreResources（DB 导入前事务外/无）、cloneAggregate（仅 renamable 聚合 RENAME/缺则 finalize 拒）。**聚合根被 SKIP 时其成员 transformRow 不调用**。
+各 hook 调用时机与缺省：collectFileResources（导出前收集文件/缺省空集）、beforeArchive（剥离后仅改备份副本/no-op）、transformRow（导入前/原行，返回 null 跳过该行）、restoreResources（DB 导入前事务外/无）、cloneAggregate（仅 renamable 聚合 RENAME/缺则 finalize 拒）。**聚合根被 SKIP 时其成员 transformRow 不调用**。
+
+**恢复期 hook 分两阶段**（in-tx vs post-tx 边界严格分离，符合 §9「withWriteTx fn 内仅 DB ops」约束）：
+- **`afterImport`（in-tx，commit 前）**：在写事务**内**、commit **之前**执行，只允许依赖已写入 DB 行的派生操作——主要是 **FTS 重建**（TOPICS 调 `rebuildMessageFts`、AGENTS 调 `rebuildSessionMessageFts`，复用 in-tx 已导入行、重建 FTS5 content table，使其与业务行在同一事务内一致提交）。
+- **`afterCommit`（post-tx，commit/rollback 之后）**：在写事务**外**、commit/rollback **之后**执行，只允许读已落盘的最终 DB 状态或触达进程内 cache/scheduler——**PREFERENCES** 调 `PreferenceService.reloadFromDb()+rebroadcast`（reloadFromDb 须读已 commit 的偏好使 main + 各 renderer cache 失效重载，事务回滚时则不重载）；**AGENTS** 调 `rearmSchedulesAfterImport`（重新 arm `job_schedule(type='agent.task')` timer，DB 导入不调 registerJobSchedule，否则 task 不 fire 直到重启）。两者都依赖 commit 后的持久状态（cache 重载须读最终值、schedule 须基于最终行集），故不可在 in-tx 阶段运行（回滚会导致 reload/arm 与已回滚 DB 不一致）。
 
 > [!IMPORTANT]
-> **Contributor placement / ownership**：各 contributor declaration **co-locate 在该域 owning module 的实际位置**（遵守 main-process 现有目录边界，不强制 `src/main/services/`——如 `topicsContributor` 在 data/services/topics、providers 在 data/services、knowledge 在 features/knowledge、agent 在 ai；flat owning module 用 per-domain 子目录或唯一文件名），由业务域 owner 声明该域 entity facts（表归属/引用/聚合/file-ref/JSON 软引用）。contributor-consumed 的纯类型 / context 类型 / runtime helper / codegen 产物 / 枚举归 **process-local neutral layer** `@main/data/db/backup/`（data/schema-owned，main-only：`contributor-types` / `contexts` / `freeze` / `dbSchemaRefs` / `domains[BackupDomain+ConflictStrategy]`），业务域 + backup service **同向** import——避免 data 域 contributor → services/backup 逆向依赖、shared 层不扩大（codegen 产物 / main-only 枚举不放 shared）。backup 模块（`src/main/services/backup/`）只持统一 barrel（聚合 14 域导出）+ registry + finalize + orchestrator，**不承载 domain-specific facts**，也不持 contributor-consumed 类型/helper（归 neutral layer）。
+> **Contributor placement / ownership**：各 contributor declaration **co-locate 在该域 owning module 的实际位置**（遵守 main-process 现有目录边界）。实际约定是 **data 层 flat**——14 个 contributor 均在 `src/main/data/services/backupContributor-<domain>.ts`（如 `backupContributor-topics` / `-providers` / `-knowledge` / `-agents`，唯一文件名）；数据声明归数据层，避免 backup→业务模块逆向依赖。例外：`src/main/data/backupContributor-preferences.ts`（上一级）、`src/main/services/translate/backupContributor.ts`（TRANSLATE_HISTORY co-locate 业务模块）。`features/knowledge/` / `ai/` 等业务模块路径仅作非强制 co-location 举例（早期设想，现未采用）。contributor-consumed 的纯类型 / context 类型 / runtime helper / codegen 产物 / 枚举归 **process-local neutral layer** `@main/data/db/backup/`（data/schema-owned，main-only：`contributor-types` / `contexts` / `freeze` / `dbSchemaRefs` / `domains[BackupDomain+ConflictStrategy]`），业务域 + backup service **同向** import——避免 data 域 contributor → services/backup 逆向依赖、shared 层不扩大（codegen 产物 / main-only 枚举不放 shared）。backup 模块（`src/main/services/backup/`）只持统一 barrel（聚合 14 域导出）+ registry + finalize + orchestrator，**不承载 domain-specific facts**，也不持 contributor-consumed 类型/helper（归 neutral layer）。
 
 > [!TIP]
 > **lifecycle 边界**：`ContributorManager` 定位为 **non-lifecycle named singleton**（`export const contributorManager = new ContributorManager()`），**不**进 `serviceRegistry.ts`、不加 `@ServicePhase`——它不持有长生命周期资源、不连 DB、无 IPC/定时器/事件订阅，只有"启动期一次性 finalize 产出冻结 BackupRegistry"的纯函数式行为（对齐 CLAUDE.md Non-Lifecycle Services 决策指南）。finalize 由 `BackupService.onInit()` 调 `getRegistry()` **惰性触发**：失败抛 `ContributorFinalizeError` → BackupService.onInit 失败 → lifecycle 容器拒绝启动（启动期校验语义保留）。`BackupService` 仍是 WhenReady（持 orchestrator/RESTORE BARRIER/journal 等长生命周期资源）；finalize 只校验静态一致性、**不连 DB**（DB 覆盖由 coverage test 保证，避免 WhenReady 服务违规依赖 DbService）。
@@ -394,7 +398,7 @@ flowchart TB
 >
 > **Upstream prerequisites（gating）**：依赖 DbService 新增 `createSnapshot`（事务外建整库快照，专用 VACUUM INTO；better-sqlite3 单连接同步，序列化 by construction，不需额外写锁）+ `restoreDbFromSnapshot`（**整库回滚组合 API**，含 checkpoint/close/safe-promote/reconnect/校验；rollback + recoverOnBoot 两入口共享，消 drift）+ `verifyLiveDb`（completed 门）+ PreferenceService.reloadFromDb + DataApiService.armMutationGate/disarmMutationGate + PreferenceService.armWriteGate/disarmWriteGate（RESTORE BARRIER gate），须先合 upstream API PR 再合 backup 实现。
 >
-> **Preference cache 一致性**（M1）：`PreferenceService` 启动一次性 load DB 进内存 cache 后不再 re-read；故 PREFERENCES 域 `afterImport` 须触发 `PreferenceService.reloadFromDb()+rebroadcast` 使 main + 各 renderer cache 失效重载；整库回滚（live DB 已换）后同样触发（所有 cache 失效）。否则恢复/回滚的偏好对运行态静默不生效，直至重启。
+> **Preference cache 一致性**（M1）：`PreferenceService` 启动一次性 load DB 进内存 cache 后不再 re-read；故 PREFERENCES 域 `afterCommit` 须触发 `PreferenceService.reloadFromDb()+rebroadcast` 使 main + 各 renderer cache 失效重载（reloadFromDb 读已 commit 的偏好，须在 commit 之后运行，故属 post-tx `afterCommit` 而非 in-tx `afterImport`，见 §7）；整库回滚（live DB 已换）后同样触发（所有 cache 失效）。否则恢复/回滚的偏好对运行态静默不生效，直至重启。
 
 ---
 
