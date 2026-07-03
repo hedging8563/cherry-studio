@@ -79,15 +79,15 @@ describe('buildClaudeCodeQueryRequestForAgentSession resume-token precedence', (
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.isTraceModeEnabled.mockReturnValue(false)
-    mocks.getSessionById.mockResolvedValue({ id: 'session-1', agentId: 'agent-1' })
-    mocks.getAgent.mockResolvedValue({ id: 'agent-1', model: 'provider-1::model-1' })
-    mocks.getProviderByProviderId.mockResolvedValue({
+    mocks.getSessionById.mockReturnValue({ id: 'session-1', agentId: 'agent-1' })
+    mocks.getAgent.mockReturnValue({ id: 'agent-1', model: 'provider-1::model-1' })
+    mocks.getProviderByProviderId.mockReturnValue({
       id: 'provider-1',
       endpointConfigs: { 'anthropic-messages': { baseUrl: 'https://anthropic.example.com' } }
     })
-    mocks.getModelByKey.mockResolvedValue({ id: 'model-1', apiModelId: 'claude-sonnet' })
+    mocks.getModelByKey.mockReturnValue({ id: 'model-1', apiModelId: 'claude-sonnet' })
     mocks.resolveEffectiveEndpoint.mockReturnValue({ baseUrl: 'https://api.example.com' })
-    mocks.getRotatedApiKey.mockResolvedValue('api-key')
+    mocks.getRotatedApiKey.mockReturnValue('api-key')
     mocks.apiGatewayEnsureKey.mockResolvedValue('gateway-key')
     mocks.apiGatewayIsRunning.mockReturnValue(true)
     mocks.apiGatewayStart.mockResolvedValue(undefined)
@@ -101,7 +101,7 @@ describe('buildClaudeCodeQueryRequestForAgentSession resume-token precedence', (
   })
 
   it('uses the explicit effectiveResume token and ignores the persisted one', async () => {
-    mocks.getLastRuntimeResumeToken.mockResolvedValue('persisted-token')
+    mocks.getLastRuntimeResumeToken.mockReturnValue('persisted-token')
 
     const request = await buildClaudeCodeQueryRequestForAgentSession('session-1', 'explicit-token')
 
@@ -110,7 +110,7 @@ describe('buildClaudeCodeQueryRequestForAgentSession resume-token precedence', (
   })
 
   it('falls back to the persisted resume token when no explicit token is given', async () => {
-    mocks.getLastRuntimeResumeToken.mockResolvedValue('persisted-token')
+    mocks.getLastRuntimeResumeToken.mockReturnValue('persisted-token')
 
     const request = await buildClaudeCodeQueryRequestForAgentSession('session-1')
 
@@ -119,7 +119,7 @@ describe('buildClaudeCodeQueryRequestForAgentSession resume-token precedence', (
   })
 
   it('leaves resume undefined when neither an explicit nor a persisted token exists', async () => {
-    mocks.getLastRuntimeResumeToken.mockResolvedValue(null)
+    mocks.getLastRuntimeResumeToken.mockReturnValue(null)
 
     const request = await buildClaudeCodeQueryRequestForAgentSession('session-1')
 
@@ -128,7 +128,7 @@ describe('buildClaudeCodeQueryRequestForAgentSession resume-token precedence', (
   })
 
   it('uses the provider Anthropic endpoint directly when all selected models belong to that provider', async () => {
-    mocks.getLastRuntimeResumeToken.mockResolvedValue(null)
+    mocks.getLastRuntimeResumeToken.mockReturnValue(null)
 
     const request = await buildClaudeCodeQueryRequestForAgentSession('session-1')
 
@@ -145,24 +145,65 @@ describe('buildClaudeCodeQueryRequestForAgentSession resume-token precedence', (
     expect(mocks.apiGatewayStart).not.toHaveBeenCalled()
   })
 
+  it('injects the Ollama dummy token for direct Anthropic routing when no API key is configured', async () => {
+    mocks.getAgent.mockReturnValue({ id: 'agent-1', model: 'ollama::qwen3:14b' })
+    mocks.getProviderByProviderId.mockReturnValue({
+      id: 'ollama',
+      presetProviderId: 'ollama',
+      endpointConfigs: { 'anthropic-messages': { baseUrl: 'http://localhost:11434' } }
+    })
+    mocks.getModelByKey.mockReturnValue({ id: 'qwen3:14b', apiModelId: 'qwen3:14b' })
+    mocks.getRotatedApiKey.mockReturnValue('')
+    mocks.getLastRuntimeResumeToken.mockReturnValue(null)
+
+    const request = await buildClaudeCodeQueryRequestForAgentSession('session-1')
+
+    expect(request?.sdkModelId).toBe('qwen3:14b')
+    expect(request?.settings.env).toMatchObject({
+      ANTHROPIC_BASE_URL: 'http://localhost:11434',
+      ANTHROPIC_API_KEY: 'ollama',
+      ANTHROPIC_AUTH_TOKEN: 'ollama',
+      ANTHROPIC_MODEL: 'qwen3:14b',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'qwen3:14b',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'qwen3:14b',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'qwen3:14b'
+    })
+    expect(mocks.apiGatewayStart).not.toHaveBeenCalled()
+  })
+
+  it('strips a trailing API version from Anthropic base URLs before launching Claude Code agents', async () => {
+    mocks.getLastRuntimeResumeToken.mockReturnValue(null)
+    mocks.getProviderByProviderId.mockReturnValue({
+      id: 'provider-1',
+      endpointConfigs: { 'anthropic-messages': { baseUrl: 'https://anthropic.example.com/v1' } }
+    })
+    mocks.resolveEffectiveEndpoint.mockReturnValue({ baseUrl: 'https://anthropic.example.com/v1' })
+
+    const request = await buildClaudeCodeQueryRequestForAgentSession('session-1')
+
+    expect(request?.settings.env).toMatchObject({
+      ANTHROPIC_BASE_URL: 'https://anthropic.example.com'
+    })
+  })
+
   it('routes non-Anthropic provider models through the local API gateway', async () => {
-    mocks.getAgent.mockResolvedValue({
+    mocks.getAgent.mockReturnValue({
       id: 'agent-1',
       model: 'openai::gpt-main',
       planModel: 'openai::gpt-plan',
       smallModel: 'other::small'
     })
-    mocks.getProviderByProviderId.mockImplementation(async (providerId: string) => ({
+    mocks.getProviderByProviderId.mockImplementation((providerId: string) => ({
       id: providerId,
       endpointConfigs: { 'openai-chat-completions': { baseUrl: `https://${providerId}.example.com` } }
     }))
-    mocks.getModelByKey.mockImplementation(async (_providerId: string, modelId: string) => ({
+    mocks.getModelByKey.mockImplementation((_providerId: string, modelId: string) => ({
       id: modelId,
       apiModelId: `${modelId}-api`
     }))
     mocks.apiGatewayIsRunning.mockReturnValue(false)
     mocks.apiGatewayGetCurrentConfig.mockReturnValue({ host: '127.0.0.1', port: 24444, apiKey: 'gateway-key' })
-    mocks.getLastRuntimeResumeToken.mockResolvedValue(null)
+    mocks.getLastRuntimeResumeToken.mockReturnValue(null)
 
     const request = await buildClaudeCodeQueryRequestForAgentSession('session-1')
 
@@ -181,19 +222,19 @@ describe('buildClaudeCodeQueryRequestForAgentSession resume-token precedence', (
   })
 
   it('rejects Gemini provider models instead of routing them through the API gateway', async () => {
-    mocks.getAgent.mockResolvedValue({
+    mocks.getAgent.mockReturnValue({
       id: 'agent-1',
       model: 'gemini::gemini-2.5-pro'
     })
-    mocks.getProviderByProviderId.mockResolvedValue({
+    mocks.getProviderByProviderId.mockReturnValue({
       id: 'gemini',
       presetProviderId: 'gemini',
       defaultChatEndpoint: 'google-generate-content',
       authType: 'api-key',
       endpointConfigs: { 'google-generate-content': { baseUrl: 'https://generativelanguage.googleapis.com' } }
     })
-    mocks.getModelByKey.mockResolvedValue({ id: 'gemini-2.5-pro', apiModelId: 'gemini-2.5-pro' })
-    mocks.getLastRuntimeResumeToken.mockResolvedValue(null)
+    mocks.getModelByKey.mockReturnValue({ id: 'gemini-2.5-pro', apiModelId: 'gemini-2.5-pro' })
+    mocks.getLastRuntimeResumeToken.mockReturnValue(null)
 
     await expect(buildClaudeCodeQueryRequestForAgentSession('session-1')).rejects.toThrow(
       'Gemini provider models are not supported by Claude Code agents: gemini'
@@ -207,16 +248,16 @@ describe('buildClaudeCodeWarmQueryRequestForAgentSession trace env baking', () =
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.isTraceModeEnabled.mockReturnValue(false)
-    mocks.getSessionById.mockResolvedValue({ id: 'session-1', agentId: 'agent-1' })
-    mocks.getAgent.mockResolvedValue({ id: 'agent-1', model: 'provider-1::model-1' })
-    mocks.getProviderByProviderId.mockResolvedValue({
+    mocks.getSessionById.mockReturnValue({ id: 'session-1', agentId: 'agent-1' })
+    mocks.getAgent.mockReturnValue({ id: 'agent-1', model: 'provider-1::model-1' })
+    mocks.getProviderByProviderId.mockReturnValue({
       id: 'provider-1',
       endpointConfigs: { 'anthropic-messages': { baseUrl: 'https://anthropic.example.com' } }
     })
-    mocks.getModelByKey.mockResolvedValue({ id: 'model-1', apiModelId: 'claude-sonnet' })
+    mocks.getModelByKey.mockReturnValue({ id: 'model-1', apiModelId: 'claude-sonnet' })
     mocks.resolveEffectiveEndpoint.mockReturnValue({ baseUrl: 'https://api.example.com' })
-    mocks.getRotatedApiKey.mockResolvedValue('api-key')
-    mocks.getLastRuntimeResumeToken.mockResolvedValue(null)
+    mocks.getRotatedApiKey.mockReturnValue('api-key')
+    mocks.getLastRuntimeResumeToken.mockReturnValue(null)
     mocks.buildSessionSettings.mockResolvedValue({ env: {} })
   })
 
@@ -231,7 +272,7 @@ describe('buildClaudeCodeWarmQueryRequestForAgentSession trace env baking', () =
   it('bakes the session-stable trace env into warm options when trace mode is on', async () => {
     mocks.isTraceModeEnabled.mockReturnValue(true)
     const traceId = 'a'.repeat(32)
-    mocks.ensureTraceId.mockResolvedValue(traceId)
+    mocks.ensureTraceId.mockReturnValue(traceId)
     mocks.traceEnvForPrewarm.mockResolvedValue({
       CLAUDE_CODE_ENABLE_TELEMETRY: '1',
       TRACEPARENT: `00-${traceId}-${'a'.repeat(16)}-01`

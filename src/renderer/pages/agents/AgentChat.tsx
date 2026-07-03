@@ -172,10 +172,10 @@ const AgentChat = ({
   const resourcePaneTopRightTool = resourcePane ? (
     <>
       {resourcePaneCount && <ResourcePaneCountButton {...resourcePaneCount} />}
+      <AgentRightPane.Shortcuts />
       <AgentRightPane.FilesToggle />
     </>
   ) : undefined
-  const resourcePaneTopRightToolReserve = resourcePaneCount ? 'history' : 'single'
 
   useEffect(() => {
     const conversationId = draftConversationKey
@@ -261,7 +261,6 @@ const AgentChat = ({
           panePosition={panePosition}
           onPaneCollapse={onPaneCollapse}
           topRightTool={resourcePaneTopRightTool}
-          topRightToolReserve={resourcePaneTopRightToolReserve}
           center={<ConversationCenterState state="loading" />}
           centerOverlay={resourcePane ? <AgentRightPane.MaximizedOverlay /> : undefined}
           rightPane={<AgentRightPane.Host />}
@@ -354,7 +353,6 @@ const AgentChat = ({
             />
           }
           topRightTool={resourcePaneTopRightTool}
-          topRightToolReserve={resourcePaneTopRightToolReserve}
           center={
             <ConversationStageCenter
               placement="home"
@@ -407,7 +405,6 @@ const AgentChat = ({
             />
           }
           topRightTool={resourcePaneTopRightTool}
-          topRightToolReserve={resourcePaneTopRightToolReserve}
           center={
             <ConversationStageCenter
               placement="home"
@@ -717,11 +714,10 @@ const AgentChatSessionFrame = ({
         topRightTool={
           <>
             {resourcePaneCount && <ResourcePaneCountButton {...resourcePaneCount} />}
-            <AgentRightPane.InfoCard />
+            <AgentRightPane.Shortcuts />
             <AgentRightPane.FilesToggle />
           </>
         }
-        topRightToolReserve={resourcePaneCount ? 'history' : 'double'}
         center={
           <ConversationStageCenter
             placement="docked"
