@@ -6035,7 +6035,8 @@
         "uv": "Python package manager for MCP services and dependency installation."
       },
       "update": "Update to latest version",
-      "updateCheckFailed": "Failed to check for updates"
+      "updateCheckFailed": "Failed to check for updates",
+      "update_short": "Update"
     },
     "developer": {
       "enable_developer_mode": "Enable Developer Mode",

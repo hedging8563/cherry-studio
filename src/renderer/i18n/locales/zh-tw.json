@@ -6035,7 +6035,8 @@
         "uv": "用於 MCP 服務與依賴安裝的 Python 套件管理工具。"
       },
       "update": "更新到最新版本",
-      "updateCheckFailed": "檢查更新失敗"
+      "updateCheckFailed": "檢查更新失敗",
+      "update_short": "更新"
     },
     "developer": {
       "enable_developer_mode": "啟用開發者模式",
