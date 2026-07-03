@@ -1,5 +1,10 @@
 import { fileEntryTable } from '@data/db/schemas/file'
-import { chatMessageFileRefTable, paintingFileRefTable } from '@data/db/schemas/fileRelations'
+import {
+  chatMessageFileRefTable,
+  paintingFileRefTable,
+  persistentFileRefTablesBySourceType,
+  persistentRefAbsenceConditions
+} from '@data/db/schemas/fileRelations'
 import { messageTable } from '@data/db/schemas/message'
 import { paintingTable } from '@data/db/schemas/painting'
 import { topicTable } from '@data/db/schemas/topic'
@@ -1350,70 +1355,72 @@ describe('FileEntryService', () => {
     })
   })
 
+  // Shared by `findUnreferenced` and `findCleanupCandidates` — both need to
+  // seed a persistent (painting / chat) ref pointing at a given entry.
+  async function seedRef(fileEntryId: FileEntryId): Promise<void> {
+    const now = Date.now()
+    const paintingId = '11111111-1111-4111-8111-' + fileEntryId.slice(-12)
+    await dbh.db.insert(paintingTable).values({
+      id: paintingId,
+      providerId: 'provider',
+      modelId: null,
+      prompt: 'prompt',
+      orderKey: paintingId,
+      createdAt: now,
+      updatedAt: now
+    })
+    await dbh.db.insert(paintingFileRefTable).values({
+      id: '22222222-2222-4222-8222-' + fileEntryId.slice(-12),
+      fileEntryId,
+      sourceId: paintingId,
+      role: 'output',
+      createdAt: now,
+      updatedAt: now
+    })
+  }
+
+  async function seedChatRef(fileEntryId: FileEntryId): Promise<void> {
+    const now = Date.now()
+    const suffix = fileEntryId.slice(-12)
+    const topicId = `topic-${suffix}`
+    const rootId = `root-${suffix}`
+    const messageId = `message-${suffix}`
+    await dbh.db.insert(topicTable).values({ id: topicId, activeNodeId: messageId, orderKey: topicId })
+    await dbh.db.insert(messageTable).values([
+      {
+        id: rootId,
+        parentId: null,
+        topicId,
+        role: 'root',
+        data: { parts: [] },
+        status: 'success',
+        siblingsGroupId: 0,
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        id: messageId,
+        parentId: rootId,
+        topicId,
+        role: 'user',
+        data: { parts: [{ type: 'text', text: 'hello' }] },
+        status: 'success',
+        siblingsGroupId: 0,
+        createdAt: now,
+        updatedAt: now
+      }
+    ])
+    await dbh.db.insert(chatMessageFileRefTable).values({
+      id: `33333333-3333-4333-8333-${suffix}`,
+      fileEntryId,
+      sourceId: messageId,
+      role: 'attachment',
+      createdAt: now,
+      updatedAt: now
+    })
+  }
+
   describe('findUnreferenced', () => {
-    async function seedRef(fileEntryId: FileEntryId): Promise<void> {
-      const now = Date.now()
-      const paintingId = '11111111-1111-4111-8111-' + fileEntryId.slice(-12)
-      await dbh.db.insert(paintingTable).values({
-        id: paintingId,
-        providerId: 'provider',
-        modelId: null,
-        prompt: 'prompt',
-        orderKey: paintingId,
-        createdAt: now,
-        updatedAt: now
-      })
-      await dbh.db.insert(paintingFileRefTable).values({
-        id: '22222222-2222-4222-8222-' + fileEntryId.slice(-12),
-        fileEntryId,
-        sourceId: paintingId,
-        role: 'output',
-        createdAt: now,
-        updatedAt: now
-      })
-    }
-
-    async function seedChatRef(fileEntryId: FileEntryId): Promise<void> {
-      const now = Date.now()
-      const suffix = fileEntryId.slice(-12)
-      const topicId = `topic-${suffix}`
-      const rootId = `root-${suffix}`
-      const messageId = `message-${suffix}`
-      await dbh.db.insert(topicTable).values({ id: topicId, activeNodeId: messageId, orderKey: topicId })
-      await dbh.db.insert(messageTable).values([
-        {
-          id: rootId,
-          parentId: null,
-          topicId,
-          role: 'root',
-          data: { parts: [] },
-          status: 'success',
-          siblingsGroupId: 0,
-          createdAt: now,
-          updatedAt: now
-        },
-        {
-          id: messageId,
-          parentId: rootId,
-          topicId,
-          role: 'user',
-          data: { parts: [{ type: 'text', text: 'hello' }] },
-          status: 'success',
-          siblingsGroupId: 0,
-          createdAt: now,
-          updatedAt: now
-        }
-      ])
-      await dbh.db.insert(chatMessageFileRefTable).values({
-        id: `33333333-3333-4333-8333-${suffix}`,
-        fileEntryId,
-        sourceId: messageId,
-        role: 'attachment',
-        createdAt: now,
-        updatedAt: now
-      })
-    }
-
     it('returns only entries with zero persistent refs', async () => {
       const referenced = '019606a0-0000-7000-8000-000000000d01' as FileEntryId
       const orphan = '019606a0-0000-7000-8000-000000000d02' as FileEntryId
@@ -1530,6 +1537,61 @@ describe('FileEntryService', () => {
 
       const result = fileEntryService.findUnreferenced()
       expect(result.find((e) => e.id === id)).toBeUndefined()
+    })
+  })
+
+  describe('findCleanupCandidates', () => {
+    const HOUR = 60 * 60 * 1000
+    function seedEntry(
+      id: FileEntryId,
+      policy: 'manual' | 'delete_when_unreferenced',
+      ageMs: number,
+      deletedAt: number | null = null
+    ) {
+      const ts = Date.now() - ageMs
+      return dbh.db.insert(fileEntryTable).values({
+        id,
+        origin: 'internal',
+        name: 'e',
+        ext: 'txt',
+        size: 1,
+        externalPath: null,
+        cleanupPolicy: policy,
+        deletedAt,
+        createdAt: ts,
+        updatedAt: ts
+      })
+    }
+
+    it('returns only auto-policy, zero-ref entries past grace; includes trashed; excludes manual/young/referenced', async () => {
+      const auto = '019606a0-0000-7000-8000-0000000cc001' as FileEntryId
+      const manual = '019606a0-0000-7000-8000-0000000cc002' as FileEntryId
+      const young = '019606a0-0000-7000-8000-0000000cc003' as FileEntryId
+      const referenced = '019606a0-0000-7000-8000-0000000cc004' as FileEntryId
+      const trashed = '019606a0-0000-7000-8000-0000000cc005' as FileEntryId
+      await seedEntry(auto, 'delete_when_unreferenced', 2 * HOUR)
+      await seedEntry(manual, 'manual', 2 * HOUR)
+      await seedEntry(young, 'delete_when_unreferenced', 0)
+      await seedEntry(referenced, 'delete_when_unreferenced', 2 * HOUR)
+      await seedEntry(trashed, 'delete_when_unreferenced', 2 * HOUR, Date.now())
+      await seedRef(referenced)
+
+      const ids = fileEntryService.findCleanupCandidates({ graceMs: HOUR, limit: 100 }).map((e) => e.id)
+      expect(ids.sort()).toEqual([auto, trashed].sort())
+      expect(fileEntryService.countCleanupCandidates(HOUR)).toBe(2)
+    })
+
+    it('respects the batch limit', async () => {
+      for (let i = 0; i < 5; i++) {
+        await seedEntry(`019606a0-0000-7000-8000-0000000cd00${i}`, 'delete_when_unreferenced', 2 * HOUR)
+      }
+      expect(fileEntryService.findCleanupCandidates({ graceMs: HOUR, limit: 3 })).toHaveLength(3)
+      expect(fileEntryService.countCleanupCandidates(HOUR)).toBe(5)
+    })
+
+    it('anti-join covers every registered persistent ref table', () => {
+      const conditions = persistentRefAbsenceConditions()
+      expect(conditions).toHaveLength(Object.keys(persistentFileRefTablesBySourceType).length)
     })
   })
 

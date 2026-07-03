@@ -6,7 +6,7 @@ import {
   paintingRoles,
   paintingSourceType
 } from '@shared/data/types/file/ref'
-import { sql, type SQLWrapper } from 'drizzle-orm'
+import { type SQL, sql, type SQLWrapper } from 'drizzle-orm'
 import { check, index, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 import { createUpdateTimestamps, uuidPrimaryKey } from './_columnHelpers'
@@ -83,6 +83,17 @@ export const persistentFileRefTablesBySourceType = {
   [chatMessageSourceType]: chatMessageFileRefTable,
   [paintingSourceType]: paintingFileRefTable
 } as const satisfies Record<PersistentFileRefSourceType, typeof chatMessageFileRefTable | typeof paintingFileRefTable>
+
+/**
+ * NOT EXISTS conditions for "no persistent ref points at this file_entry",
+ * generated from the registry so a new ref table cannot be silently omitted
+ * from unreferenced/cleanup discovery (file-entry-cleanup.md §5.1).
+ */
+export function persistentRefAbsenceConditions(): SQL[] {
+  return Object.values(persistentFileRefTablesBySourceType).map(
+    (table) => sql`NOT EXISTS (SELECT 1 FROM ${table} WHERE ${table.fileEntryId} = ${fileEntryTable.id})`
+  )
+}
 
 export type ChatMessageFileRefRow = typeof chatMessageFileRefTable.$inferSelect
 export type InsertChatMessageFileRefRow = typeof chatMessageFileRefTable.$inferInsert

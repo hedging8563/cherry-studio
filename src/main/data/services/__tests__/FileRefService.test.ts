@@ -1,3 +1,4 @@
+import { application } from '@application'
 import { fileEntryTable } from '@data/db/schemas/file'
 import { chatMessageFileRefTable, paintingFileRefTable } from '@data/db/schemas/fileRelations'
 import { messageTable } from '@data/db/schemas/message'
@@ -259,6 +260,34 @@ describe('FileRefService', () => {
       expect(fileRefService.findBySource({ sourceType: 'temp_session', sourceId: 's' })).toEqual([
         expect.objectContaining({ fileEntryId: existing })
       ])
+    })
+  })
+
+  describe('countPersistentRefsByEntryIdTx', () => {
+    it('counts across all persistent tables inside a tx', async () => {
+      const entryId = '019606a0-0000-7000-8000-00000000ee01' as FileEntryId
+      const paintingId = await seedPainting()
+      const messageId = await seedChatMessage()
+      await seedEntry(entryId)
+      await seedPaintingRef(entryId, paintingId, 'output')
+      await seedChatRef(entryId, messageId)
+
+      const n = application
+        .get('DbService')
+        .withWriteTx((tx) => fileRefService.countPersistentRefsByEntryIdTx(tx, entryId))
+
+      expect(n).toBe(2)
+    })
+
+    it('returns 0 for an entry with no persistent refs', async () => {
+      const entryId = '019606a0-0000-7000-8000-00000000ee02' as FileEntryId
+      await seedEntry(entryId)
+
+      const n = application
+        .get('DbService')
+        .withWriteTx((tx) => fileRefService.countPersistentRefsByEntryIdTx(tx, entryId))
+
+      expect(n).toBe(0)
     })
   })
 })

@@ -20,11 +20,7 @@
 
 import { application } from '@application'
 import { fileEntryTable } from '@data/db/schemas/file'
-import {
-  chatMessageFileRefTable,
-  paintingFileRefTable,
-  type PersistentFileRefSourceType
-} from '@data/db/schemas/fileRelations'
+import { persistentRefAbsenceConditions } from '@data/db/schemas/fileRelations'
 import type { DbOrTx } from '@data/db/types'
 import { loggerService } from '@logger'
 import { DataApiErrorFactory } from '@shared/data/api'
@@ -44,8 +40,7 @@ import {
   InternalEntrySchema,
   SafeNameSchema
 } from '@shared/data/types/file'
-import { chatMessageSourceType, paintingSourceType } from '@shared/data/types/file/ref'
-import { and, asc, count, eq, isNotNull, isNull, type SQL, sql, type SQLWrapper } from 'drizzle-orm'
+import { and, asc, count, eq, isNotNull, isNull, lt, type SQL, sql, type SQLWrapper } from 'drizzle-orm'
 import { v7 as uuidv7 } from 'uuid'
 import * as z from 'zod'
 import { ZodError } from 'zod'
@@ -206,6 +201,15 @@ export interface FileEntryService {
    * Un-parseable rows are skipped with a warning (see `rowToFileEntrySafe`).
    */
   findUnreferenced(query?: { origin?: FileEntryOrigin }): FileEntry[]
+
+  /** Auto-policy entries past grace with zero persistent refs (trashed included) — backs the GC pass. */
+  findCleanupCandidates(opts: { graceMs: number; limit: number }): FileEntry[]
+
+  /** Count of `findCleanupCandidates` matches, ignoring `limit`. */
+  countCleanupCandidates(graceMs: number): number
+
+  /** Total row count across all entries, regardless of trashed state. */
+  countAll(): number
 
   /**
    * All entry ids regardless of trashed state — backs the on-demand orphan
@@ -538,17 +542,7 @@ class FileEntryServiceImpl implements FileEntryService {
   }
 
   findUnreferenced(query: { origin?: FileEntryOrigin } = {}): FileEntry[] {
-    const persistentRefAbsenceConditions = {
-      [chatMessageSourceType]: () =>
-        sql`NOT EXISTS (SELECT 1 FROM ${chatMessageFileRefTable} WHERE ${chatMessageFileRefTable.fileEntryId} = ${fileEntryTable.id})`,
-      [paintingSourceType]: () =>
-        sql`NOT EXISTS (SELECT 1 FROM ${paintingFileRefTable} WHERE ${paintingFileRefTable.fileEntryId} = ${fileEntryTable.id})`
-    } satisfies Record<PersistentFileRefSourceType, () => SQL>
-
-    const conditions: SQL[] = [
-      isNull(fileEntryTable.deletedAt),
-      ...Object.values(persistentRefAbsenceConditions).map((buildCondition) => buildCondition())
-    ]
+    const conditions: SQL[] = [isNull(fileEntryTable.deletedAt), ...persistentRefAbsenceConditions()]
     if (query.origin) conditions.push(eq(fileEntryTable.origin, query.origin))
     const rows = this.getDb()
       .select({ entry: fileEntryTable })
@@ -557,6 +551,40 @@ class FileEntryServiceImpl implements FileEntryService {
       .orderBy(asc(fileEntryTable.createdAt))
       .all()
     return rows.map((r) => rowToFileEntrySafe(r.entry)).filter((e): e is FileEntry => e !== null)
+  }
+
+  private cleanupCandidateConditions(graceMs: number): SQL[] {
+    return [
+      // NOTE: no deletedAt filter — trashed auto entries are reclaimed too (spec §5.1)
+      eq(fileEntryTable.cleanupPolicy, 'delete_when_unreferenced'),
+      lt(fileEntryTable.createdAt, Date.now() - graceMs),
+      ...persistentRefAbsenceConditions()
+    ]
+  }
+
+  findCleanupCandidates(opts: { graceMs: number; limit: number }): FileEntry[] {
+    const rows = this.getDb()
+      .select({ entry: fileEntryTable })
+      .from(fileEntryTable)
+      .where(and(...this.cleanupCandidateConditions(opts.graceMs)))
+      .orderBy(asc(fileEntryTable.createdAt))
+      .limit(opts.limit)
+      .all()
+    return rows.map((r) => rowToFileEntrySafe(r.entry)).filter((e): e is FileEntry => e !== null)
+  }
+
+  countCleanupCandidates(graceMs: number): number {
+    const rows = this.getDb()
+      .select({ c: count() })
+      .from(fileEntryTable)
+      .where(and(...this.cleanupCandidateConditions(graceMs)))
+      .all()
+    return rows[0]?.c ?? 0
+  }
+
+  countAll(): number {
+    const rows = this.getDb().select({ c: count() }).from(fileEntryTable).all()
+    return rows[0]?.c ?? 0
   }
 
   listAllIds(): Set<FileEntryId> {

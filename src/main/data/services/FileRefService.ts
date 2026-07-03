@@ -17,8 +17,10 @@ import { fileEntryTable } from '@data/db/schemas/file'
 import {
   chatMessageFileRefTable,
   paintingFileRefTable,
-  type PersistentFileRefSourceType
+  type PersistentFileRefSourceType,
+  persistentFileRefTablesBySourceType
 } from '@data/db/schemas/fileRelations'
+import type { DbOrTx } from '@data/db/types'
 import type { FileEntryId, FileRef, FileRefSourceType } from '@shared/data/types/file'
 import { FileRefSchema } from '@shared/data/types/file'
 import type { tempSessionRoles } from '@shared/data/types/file/ref'
@@ -61,6 +63,9 @@ export interface FileRefService {
 
   /** Drop temp-session cache refs whose file_entry no longer exists. */
   pruneMissingTempSessionRefs(existingEntryIds: ReadonlySet<FileEntryId>): number
+
+  /** Persistent-ref count for one entry, inside the caller's tx (cleanup pass §5.4). Excludes temp-session refs. */
+  countPersistentRefsByEntryIdTx(tx: DbOrTx, id: FileEntryId): number
 }
 
 const SQLITE_INARRAY_CHUNK = 500
@@ -262,6 +267,15 @@ class FileRefServiceImpl implements FileRefService {
       this.writeTempSessionCache(cache)
     }
     return removed
+  }
+
+  countPersistentRefsByEntryIdTx(tx: DbOrTx, id: FileEntryId): number {
+    let total = 0
+    for (const table of Object.values(persistentFileRefTablesBySourceType)) {
+      const rows = tx.select({ c: count() }).from(table).where(eq(table.fileEntryId, id)).all()
+      total += rows[0]?.c ?? 0
+    }
+    return total
   }
 
   private assertEntriesExist(entryIds: readonly FileEntryId[]): void {
