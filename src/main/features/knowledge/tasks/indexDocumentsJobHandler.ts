@@ -270,7 +270,7 @@ async function buildRebuildMaterialInput(
   if (usesEmbeddings) {
     const vectorStoreService = application.get('KnowledgeVectorStoreService')
     const store = await vectorStoreService.getIndexStore(base)
-    const existingHashes = await store.listExistingEmbeddingHashes([...bodyByHash.keys()])
+    const existingHashes = store.listExistingEmbeddingHashes([...bodyByHash.keys()])
     const missing = [...bodyByHash.entries()].filter(([hash]) => !existingHashes.has(hash))
     const vectors = await embedKnowledgeTexts(
       base,
@@ -316,7 +316,7 @@ async function writeItemMaterial(
 
     const vectorStoreService = application.get('KnowledgeVectorStoreService')
     const store = await vectorStoreService.getIndexStore(base)
-    await store.rebuildMaterial(itemId, input)
+    store.rebuildMaterial(itemId, input)
     knowledgeItemService.updateStatus(itemId, 'completed')
   })
 }

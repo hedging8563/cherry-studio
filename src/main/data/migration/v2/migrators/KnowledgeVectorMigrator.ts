@@ -991,7 +991,7 @@ export class KnowledgeVectorMigrator extends BaseMigrator {
           const store = new KnowledgeIndexStore(driver, betterSqlite3VectorIndex)
 
           for (const material of plan.materials) {
-            await store.rebuildMaterial(material.itemId, material.input)
+            store.rebuildMaterial(material.itemId, material.input)
             processedWork += 1
             this.reportRebuildProgress(processedWork, totalWork)
             await yieldToEventLoop()

@@ -95,7 +95,7 @@ describe('index-documents job handler', () => {
     loadKnowledgeItemDocumentsMock.mockResolvedValueOnce(distinctDocuments())
     // 'bravo' is already in the index; reindexing must not re-embed it.
     const storedHash = hashEmbeddingText('bravo')
-    listExistingEmbeddingHashesMock.mockResolvedValueOnce(new Set([storedHash]))
+    listExistingEmbeddingHashesMock.mockReturnValueOnce(new Set([storedHash]))
 
     await handler.execute(createCtx({ baseId: 'kb-1', itemId: NOTE_ITEM_ID, parentJobId: null }))
 
@@ -116,7 +116,7 @@ describe('index-documents job handler', () => {
     knowledgeItemGetByIdMock.mockReturnValue(createNoteItem(NOTE_ITEM_ID))
     knowledgeItemUpdateStatusMock.mockReturnValue(createNoteItem(NOTE_ITEM_ID))
     loadKnowledgeItemDocumentsMock.mockResolvedValueOnce(distinctDocuments())
-    listExistingEmbeddingHashesMock.mockResolvedValueOnce(new Set(DISTINCT_DOCS.map(hashEmbeddingText)))
+    listExistingEmbeddingHashesMock.mockReturnValueOnce(new Set(DISTINCT_DOCS.map(hashEmbeddingText)))
 
     await handler.execute(createCtx({ baseId: 'kb-1', itemId: NOTE_ITEM_ID, parentJobId: null }))
 
@@ -232,7 +232,9 @@ describe('index-documents job handler', () => {
   it('does not mark completed when vector replacement fails', async () => {
     const handler = createIndexDocumentsJobHandler(knowledgeLockManager as never)
     knowledgeItemGetByIdMock.mockReturnValue(createNoteItem(NOTE_ITEM_ID))
-    rebuildMaterialMock.mockRejectedValueOnce(new Error('vector write failed'))
+    rebuildMaterialMock.mockImplementationOnce(() => {
+      throw new Error('vector write failed')
+    })
 
     await expect(
       handler.execute(createCtx({ baseId: 'kb-1', itemId: NOTE_ITEM_ID, parentJobId: null }))
