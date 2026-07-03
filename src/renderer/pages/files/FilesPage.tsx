@@ -126,7 +126,8 @@ async function requestBatchedInternalEntryCreates(paths: readonly string[]): Pro
         items: chunk.map((path) => ({
           source: 'path' as const,
           path,
-          cleanupPolicy: 'delete_when_unreferenced' as const
+          // Files-page upload = add-to-library: 'manual' keeps zero-ref uploads out of GC (spec §4.1)
+          cleanupPolicy: 'manual' as const
         }))
       })
     )
