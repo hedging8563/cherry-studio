@@ -139,9 +139,13 @@ After commit, run the existing `cleanupDeletedEntry` from `permanentDelete`'s im
 ### 5.5 Triggering
 
 - Once on FileManager init, after `danglingCache.initFromDb()`.
-- `BaseService.registerInterval()`, every 30 min.
+- `BaseService.registerInterval()`, every 30 min, **idle-gated** (below).
 - Inside `runSweep()` — the cleanup UI's DB pass becomes "report `manual` zero-ref entries / reclaim `delete_when_unreferenced` ones" over the same anti-join.
 - `FileManager.scheduleCleanup()` — a debounced (~5s) JS-level nudge business delete flows may call after committing. Pure latency optimization; the interval is the reliability mechanism. **No DB trigger is involved anywhere.**
+
+**Idle gate on interval ticks.** At each tick, run only if `PowerService.getSystemIdleTime() ≥ 60s` (`core/power/PowerService.ts`; FileManager declares `@DependsOn(['PowerService'])` — same WhenReady phase) **or** the last completed pass is > 2h old (reliability floor for always-active sessions); otherwise skip and let the next tick re-check. This keeps background deletions out of moments the user is actively working, at the cost of one native call per tick.
+
+The gate applies to interval ticks **only**. The init pass (previous-session backlog), the nudge (fires right after a user-initiated delete — the user is active by definition, so gating it would neuter it), and `runSweep` / confirmed drains (explicit user actions) all run ungated. Note this is still timer-driven: `powerMonitor` pushes no "became idle" event for arbitrary thresholds, so idleness can only be sampled — an idle gate refines the interval, it cannot replace it.
 
 ### 5.6 Failure handling & observability
 
@@ -218,6 +222,7 @@ Shipped in the same PR series:
   - safety threshold → automatic pass aborts, nothing deleted;
   - over-threshold candidate set + `confirmed` invocation → drains (batched, per-candidate re-verified); automatic passes resume once under threshold;
   - candidate query covers every table in `persistentFileRefTablesBySourceType` (coverage test);
+  - idle gate: active user (< 60s idle) → tick skipped; idle → runs; > 2h since last completed pass → runs despite activity; init/nudge/confirmed paths unaffected by the gate;
   - batch limit respected; failed candidate retried next pass (idempotence).
 - **Policy lifecycle**: `ensureExternalEntry` reuse upgrades auto→manual and never downgrades; DataApi flip endpoint sets both directions.
 - **Migrators**: ref-backfilled files → auto; zero-ref survivors → manual.
