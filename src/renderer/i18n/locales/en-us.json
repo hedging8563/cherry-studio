@@ -225,9 +225,10 @@
           "updateFailed": "Failed to update task"
         },
         "frequency": {
-          "everyPrefix": "Every",
-          "everySuffix": "minutes",
-          "label": "Execution Frequency"
+          "cronExpression": "Cron Expression",
+          "interval": "Interval",
+          "label": "Execution Frequency",
+          "onceAt": "Run At"
         },
         "intervalPlaceholder": "At least 1",
         "intervalUnit": "minutes",
@@ -5095,6 +5096,7 @@
         "r_regenerate": "R: Regenerate"
       }
     },
+    "description": "Select any text to instantly translate, explain, summarize, and more",
     "name": "Selection Assistant",
     "settings": {
       "actions": {
@@ -5333,6 +5335,7 @@
         "title": "Feedback"
       },
       "label": "About & Feedback",
+      "page_description": "Version info, updates, and community links",
       "releases": {
         "button": "Releases",
         "title": "Release Notes"
@@ -5361,6 +5364,7 @@
       }
     },
     "appearance": {
+      "description": "Language, theme, fonts, and display preferences",
       "title": "Appearance"
     },
     "assistant": {
@@ -6259,6 +6263,7 @@
       "args": "Arguments",
       "argsTooltip": "Each argument on a new line",
       "baseUrlTooltip": "Remote server base URL",
+      "basicSettings": "Basic Settings",
       "builtinServers": "Builtin Servers",
       "builtinServersDescriptions": {
         "brave_search": "An MCP server implementation integrating the Brave Search API, providing both web and local search functionalities. Requires configuring the BRAVE_API_KEY environment variable",
@@ -6805,6 +6810,7 @@
     "notification": {
       "assistant": "Assistant Message",
       "backup": "Backup Message",
+      "description": "Choose which events send system notifications",
       "knowledge_embed": "KnowledgeBase Message",
       "title": "Notifications"
     },
@@ -7227,6 +7233,7 @@
     },
     "quickAssistant": {
       "click_tray_to_show": "Click the tray icon to start",
+      "description": "A lightweight AI assistant summoned anytime via shortcut or tray",
       "enable_quick_assistant": "Enable Quick Assistant",
       "read_clipboard_at_startup": "Read clipboard at startup",
       "title": "Quick Assistant",
@@ -7292,6 +7299,7 @@
       "close_tab": "Close Tab",
       "conflict_with": "Already used by \"{{name}}\"",
       "copy_last_message": "Copy Last Message",
+      "description": "View and customize keyboard shortcuts",
       "edit_last_user_message": "Edit Last User Message",
       "empty": "No shortcuts are available in this group",
       "enabled": "Enable",
@@ -7371,6 +7379,7 @@
       "zip": "ZIP"
     },
     "system": {
+      "description": "Startup, tray, network proxy, and developer options",
       "title": "System"
     },
     "theme": {

@@ -225,9 +225,10 @@
           "updateFailed": "更新任务失败"
         },
         "frequency": {
-          "everyPrefix": "间隔",
-          "everySuffix": "分钟执行",
-          "label": "执行频率"
+          "cronExpression": "Cron 表达式",
+          "interval": "执行间隔",
+          "label": "执行频率",
+          "onceAt": "执行时间"
         },
         "intervalPlaceholder": "至少1",
         "intervalUnit": "分钟",
@@ -5095,6 +5096,7 @@
         "r_regenerate": "R 重新生成"
       }
     },
+    "description": "选中任意文本，立即执行翻译、解释、总结等快捷操作",
     "name": "划词助手",
     "settings": {
       "actions": {
@@ -5333,6 +5335,7 @@
         "title": "意见反馈"
       },
       "label": "关于我们",
+      "page_description": "版本信息、检查更新与社区链接",
       "releases": {
         "button": "查看",
         "title": "更新日志"
@@ -5361,6 +5364,7 @@
       }
     },
     "appearance": {
+      "description": "语言、主题、字体与界面显示偏好",
       "title": "外观"
     },
     "assistant": {
@@ -6259,6 +6263,7 @@
       "args": "参数",
       "argsTooltip": "每个参数占一行",
       "baseUrlTooltip": "远程 URL 地址",
+      "basicSettings": "基础配置",
       "builtinServers": "内置服务器",
       "builtinServersDescriptions": {
         "brave_search": "一个集成了Brave 搜索 API 的 MCP 服务器实现，提供网页与本地搜索双重功能。需要配置 BRAVE_API_KEY 环境变量",
@@ -6805,6 +6810,7 @@
     "notification": {
       "assistant": "助手消息",
       "backup": "备份",
+      "description": "选择哪些事件发送系统通知",
       "knowledge_embed": "知识库",
       "title": "通知"
     },
@@ -7227,6 +7233,7 @@
     },
     "quickAssistant": {
       "click_tray_to_show": "点击托盘图标启动",
+      "description": "通过快捷键或托盘随时唤起的轻量 AI 助手",
       "enable_quick_assistant": "启用快捷助手",
       "read_clipboard_at_startup": "启动时读取剪贴板",
       "title": "快捷助手",
@@ -7292,6 +7299,7 @@
       "close_tab": "关闭标签页",
       "conflict_with": "已被「{{name}}」使用",
       "copy_last_message": "复制上一条消息",
+      "description": "查看并自定义应用快捷键",
       "edit_last_user_message": "编辑最后一条用户消息",
       "empty": "当前分组下没有可显示的快捷键",
       "enabled": "启用",
@@ -7371,6 +7379,7 @@
       "zip": "ZIP"
     },
     "system": {
+      "description": "启动、托盘、网络代理与开发者选项",
       "title": "系统"
     },
     "theme": {
