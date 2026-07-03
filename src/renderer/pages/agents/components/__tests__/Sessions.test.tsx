@@ -1629,7 +1629,7 @@ describe('Sessions', () => {
     fireEvent.contextMenu(screen.getByText('Alpha session'))
     const alphaMenu = screen.getByText('Alpha session').closest('[data-testid="context-menu"]')
     const menuContent = alphaMenu?.querySelector('[data-testid="context-menu-content"]')
-    fireEvent.click(within(menuContent as HTMLElement).getByRole('menuitem', { name: 'Edit task name' }))
+    fireEvent.click(within(menuContent as HTMLElement).getByRole('menuitem', { name: 'Rename' }))
 
     expect(sessionDataMocks.updateSession).not.toHaveBeenCalled()
 

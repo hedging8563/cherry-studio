@@ -508,7 +508,6 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
               ref={inputBarRef}
             />
           )}
-          <Separator className="my-2.5" />
           <ClipboardPreview referenceText={referenceText} clearClipboard={clearClipboard} t={t} />
           <main className="flex flex-1 flex-col overflow-hidden">
             <FeatureMenus
@@ -518,7 +517,6 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
               ref={featureMenusRef}
             />
           </main>
-          <Separator className="my-2.5" />
           <Footer
             key="footer"
             {...baseFooterProps}
@@ -532,7 +530,7 @@ const HomeWindow: FC<{ draggable?: boolean }> = ({ draggable = true }) => {
 
 const containerClassName = (draggable: boolean) =>
   cn(
-    'flex h-full w-full flex-1 flex-col px-2.5 py-2',
+    'flex h-full w-full flex-1 flex-col rounded-2xl px-2.5 py-2',
     draggable ? '[-webkit-app-region:drag]' : '[-webkit-app-region:no-drag]'
   )
 

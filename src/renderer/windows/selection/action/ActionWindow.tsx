@@ -51,7 +51,6 @@ const SelectionActionContent: FC<{ action: SelectionActionItem }> = ({ action })
   const [actionWindowOpacity] = usePreference('feature.selection.action_window_opacity')
 
   const [isPinned, setIsPinned] = useState(isAutoPin)
-  const [isWindowFocus, setIsWindowFocus] = useState(true)
 
   const [showOpacitySlider, setShowOpacitySlider] = useState(false)
   const [opacity, setOpacity] = useState(actionWindowOpacity)
@@ -62,11 +61,9 @@ const SelectionActionContent: FC<{ action: SelectionActionItem }> = ({ action })
   const lastScrollHeight = useRef(0)
 
   useEffect(() => {
-    window.addEventListener('focus', handleWindowFocus)
     window.addEventListener('blur', handleWindowBlur)
 
     return () => {
-      window.removeEventListener('focus', handleWindowFocus)
       window.removeEventListener('blur', handleWindowBlur)
     }
     // don't need any dependencies
@@ -166,17 +163,10 @@ const SelectionActionContent: FC<{ action: SelectionActionItem }> = ({ action })
     void ipcApi.request('selection.pin_action_window', !isPinned)
   }
 
-  const handleWindowFocus = () => {
-    setIsWindowFocus(true)
-  }
-
   const handleWindowBlur = () => {
     if (shouldCloseWhenBlur.current) {
       handleClose()
-      return
     }
-
-    setIsWindowFocus(false)
   }
 
   const handleOpacityChange = (value: number[]) => {
@@ -222,13 +212,10 @@ const SelectionActionContent: FC<{ action: SelectionActionItem }> = ({ action })
 
   return (
     <div
-      className="relative m-0.5 flex h-[calc(100%-6px)] w-[calc(100%-6px)] flex-col overflow-hidden rounded-lg border border-border bg-background shadow-[0_0_2px_var(--color-border)]"
+      className="relative m-0.5 flex h-[calc(100%-6px)] w-[calc(100%-6px)] flex-col overflow-hidden rounded-[20px] border-[0.5px] border-frame-border bg-sidebar shadow-[0_0_2px_var(--color-border)]"
       style={{ opacity: opacity / 100 }}>
       <div
-        className={cn(
-          'flex h-8 flex-row items-center px-2 transition-colors duration-300 [-webkit-app-region:drag]',
-          isWindowFocus ? 'bg-muted' : 'bg-secondary'
-        )}
+        className="flex h-8 shrink-0 flex-row items-center px-2 [-webkit-app-region:drag]"
         style={isMac ? { paddingLeft: '70px' } : {}}>
         {action.icon && (
           <div className="ml-1 flex items-center justify-center">
@@ -264,7 +251,7 @@ const SelectionActionContent: FC<{ action: SelectionActionItem }> = ({ action })
             </WindowButton>
           </Tooltip>
           {showOpacitySlider && (
-            <div className="absolute top-full left-10 z-[80] mt-2 flex h-[120px] items-center justify-center rounded bg-popover px-2 pt-4 pb-3 opacity-100! shadow-md">
+            <div className="absolute top-full left-10 z-[80] mt-2 flex h-[120px] items-center justify-center rounded-lg bg-popover px-2 pt-4 pb-3 opacity-100! shadow-md">
               <Slider
                 orientation="vertical"
                 min={20}
@@ -289,12 +276,14 @@ const SelectionActionContent: FC<{ action: SelectionActionItem }> = ({ action })
           )}
         </div>
       </div>
-      <div className="flex h-full w-full justify-center overflow-auto">
-        <div
-          ref={contentElementRef}
-          className="flex max-w-[1280px] flex-1 select-text flex-col overflow-auto p-4 text-sm [-webkit-app-region:no-drag]">
-          {action.id == 'translate' && <ActionTranslate action={action} scrollToBottom={handleScrollToBottom} />}
-          {action.id != 'translate' && <ActionGeneral action={action} scrollToBottom={handleScrollToBottom} />}
+      <div className="min-h-0 flex-1 px-1.5 pb-1.5">
+        <div className="relative flex h-full w-full justify-center overflow-hidden rounded-[16px] border-[0.5px] border-frame-border bg-background">
+          <div
+            ref={contentElementRef}
+            className="flex max-w-[1280px] flex-1 select-text flex-col overflow-auto p-4 text-sm [-webkit-app-region:no-drag]">
+            {action.id == 'translate' && <ActionTranslate action={action} scrollToBottom={handleScrollToBottom} />}
+            {action.id != 'translate' && <ActionGeneral action={action} scrollToBottom={handleScrollToBottom} />}
+          </div>
         </div>
       </div>
     </div>
@@ -307,7 +296,7 @@ const WindowButton: FC<ComponentProps<typeof Button>> = ({ className, ...props }
     variant="ghost"
     size="icon-sm"
     className={cn(
-      'size-6 rounded border-0 bg-transparent p-0 text-foreground/80 shadow-none transition-colors hover:bg-accent hover:text-accent-foreground [&_svg]:[stroke-width:1.6]',
+      'size-6 rounded-full border-0 bg-transparent p-0 text-foreground/80 shadow-none transition-colors hover:bg-accent hover:text-accent-foreground [&_svg]:[stroke-width:var(--icon-stroke)]',
       className
     )}
     {...props}

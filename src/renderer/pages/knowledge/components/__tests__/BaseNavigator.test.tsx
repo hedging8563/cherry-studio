@@ -1052,9 +1052,9 @@ describe('BaseNavigator', () => {
     )
 
     expect(screen.getByText('默认')).toBeInTheDocument()
-    // The default group has no menu trigger, and base rows expose their actions
-    // only through the right-click context menu — so no "更多" button is rendered.
-    expect(screen.queryByRole('button', { name: '更多' })).not.toBeInTheDocument()
+    // The default group has no menu trigger; the single "更多" button belongs to
+    // the base row's hover action trigger.
+    expect(screen.getAllByRole('button', { name: '更多' })).toHaveLength(1)
   })
 
   it('filters visible sections and rows when the search value changes', () => {

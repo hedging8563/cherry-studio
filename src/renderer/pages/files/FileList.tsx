@@ -162,7 +162,7 @@ export const FileList = memo(function FileList({
                 />
               </div>
               <div className="flex min-w-0 flex-1 items-center gap-2">
-                <Icon size={13} strokeWidth={1.4} className={`shrink-0 ${typeIconColors[file.type]}`} />
+                <Icon size={13} className={`shrink-0 ${typeIconColors[file.type]}`} />
                 {isRenaming ? (
                   <InlineRename
                     value={file.name}

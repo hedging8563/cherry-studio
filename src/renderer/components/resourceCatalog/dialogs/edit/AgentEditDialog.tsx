@@ -616,7 +616,7 @@ function AgentToolsFields({
           id: tool.name,
           name: t(`agent.tools.builtin.${tool.key}.label`, tool.label),
           description: t(`agent.tools.builtin.${tool.key}.description`, tool.description),
-          icon: <Wrench size={13} strokeWidth={1.5} className="text-foreground/55" />
+          icon: <Wrench size={13} className="text-foreground/55" />
         }))
     })).filter((section) => section.items.length > 0)
   }, [t])
@@ -645,7 +645,7 @@ function AgentToolsFields({
         id: skill.id,
         name: skill.name,
         description: skill.description,
-        icon: <Sparkles size={13} strokeWidth={1.5} className="text-amber-500/60" />
+        icon: <Sparkles size={13} className="text-amber-500/60" />
       })),
     [skills]
   )
