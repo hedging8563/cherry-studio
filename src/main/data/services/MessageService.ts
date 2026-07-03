@@ -1348,7 +1348,7 @@ export class MessageService {
     }
 
     // Use transaction for atomic delete + activeNodeId update
-    return application.get('DbService').withWriteTx((tx) => {
+    const result = application.get('DbService').withWriteTx((tx) => {
       let deletedIds: string[]
       let reparentedIds: string[] | undefined
       let newActiveNodeId: string | null | undefined
@@ -1462,6 +1462,16 @@ export class MessageService {
         newActiveNodeId
       }
     })
+
+    // Best-effort GC nudge — cleanup is owned by FileManager's interval;
+    // absence of the service (tests, shutdown) must never fail the delete.
+    try {
+      application.get('FileManager').scheduleCleanup()
+    } catch {
+      /* lifecycle unavailable — interval pass will cover it */
+    }
+
+    return result
   }
 
   /**

@@ -275,6 +275,15 @@ class PaintingService {
       () => application.get('DbService').getDb().delete(paintingTable).where(eq(paintingTable.id, id)).run(),
       defaultHandlersFor('Painting', id)
     )
+
+    // Best-effort GC nudge — cleanup is owned by FileManager's interval;
+    // absence of the service (tests, shutdown) must never fail the delete.
+    try {
+      application.get('FileManager').scheduleCleanup()
+    } catch {
+      /* lifecycle unavailable — interval pass will cover it */
+    }
+
     logger.info('Deleted painting', { id })
   }
 

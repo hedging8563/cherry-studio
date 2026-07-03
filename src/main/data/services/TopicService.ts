@@ -332,12 +332,28 @@ export class TopicService {
     const dbService = application.get('DbService')
     dbService.withWriteTx((tx) => this.deleteManyByIdsTx(tx, [id], { requireAll: true }))
 
+    // Best-effort GC nudge — cleanup is owned by FileManager's interval;
+    // absence of the service (tests, shutdown) must never fail the delete.
+    try {
+      application.get('FileManager').scheduleCleanup()
+    } catch {
+      /* lifecycle unavailable — interval pass will cover it */
+    }
+
     logger.info('Deleted topic', { id })
   }
 
   deleteByIds(ids: string[]): DeleteTopicsResult {
     const dbService = application.get('DbService')
     const deletedIds = dbService.withWriteTx((tx) => this.deleteManyByIdsTx(tx, ids, { requireAll: true }))
+
+    // Best-effort GC nudge — cleanup is owned by FileManager's interval;
+    // absence of the service (tests, shutdown) must never fail the delete.
+    try {
+      application.get('FileManager').scheduleCleanup()
+    } catch {
+      /* lifecycle unavailable — interval pass will cover it */
+    }
 
     logger.info('Deleted topics', { count: deletedIds.length })
 

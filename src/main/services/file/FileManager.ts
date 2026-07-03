@@ -128,10 +128,11 @@ import { createReadStream as nodeCreateReadStream } from 'node:fs'
 import type { Readable, Writable } from 'node:stream'
 import { pathToFileURL } from 'node:url'
 
+import { application } from '@application'
 import { fileEntryService } from '@data/services/FileEntryService'
 import { fileRefService } from '@data/services/FileRefService'
 import { loggerService } from '@logger'
-import { BaseService, Injectable, Phase, ServicePhase } from '@main/core/lifecycle'
+import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@main/core/lifecycle'
 import { remove as fsRemove, stat as fsStat } from '@main/utils/file/fs'
 import type { DanglingState, FileEntry, FileEntryId } from '@shared/data/types/file'
 import { AbsolutePathSchema, CleanupPolicySchema, FileEntryIdSchema } from '@shared/data/types/file'
@@ -177,6 +178,8 @@ import {
   trash as internalTrash
 } from './internal/entry/lifecycle'
 import { rename as internalRename } from './internal/entry/rename'
+import type { EntryCleanupOptions, EntryCleanupReport } from './internal/entryCleanup'
+import { runEntryCleanup as internalRunEntryCleanup } from './internal/entryCleanup'
 import { observeExternalAccess } from './internal/observe'
 import {
   type DbSweepReport,
@@ -650,6 +653,7 @@ export interface IFileManager {
  */
 @Injectable('FileManager')
 @ServicePhase(Phase.WhenReady)
+@DependsOn(['PowerService'])
 export class FileManager extends BaseService implements IFileManager {
   // Per-instance VersionCache so each `new FileManager()` (e.g. in tests) gets
   // a fresh cache — file-manager-architecture.md §1.6.1 / §12 mandate this is
@@ -663,9 +667,55 @@ export class FileManager extends BaseService implements IFileManager {
     versionCache: this._versionCache
   }
 
+  private static readonly CLEANUP_INTERVAL_MS = 30 * 60 * 1000
+  private static readonly CLEANUP_IDLE_THRESHOLD_S = 60
+  private static readonly CLEANUP_MAX_DEFER_MS = 2 * 60 * 60 * 1000
+  private static readonly CLEANUP_NUDGE_DEBOUNCE_MS = 5_000
+
+  private lastCleanupCompletedAt = 0
+  private cleanupNudgeTimer: NodeJS.Timeout | undefined
+
   protected override async onInit(): Promise<void> {
     await this.deps.danglingCache.initFromDb()
     this.registerIpcHandlers()
+
+    // Previous-session backlog (crashed sends, pre-upgrade leaks) — ungated.
+    void this.runEntryCleanup()
+    this.registerInterval(() => this.entryCleanupTick(), FileManager.CLEANUP_INTERVAL_MS)
+    this.registerDisposable(() => {
+      if (this.cleanupNudgeTimer !== undefined) clearTimeout(this.cleanupNudgeTimer)
+    })
+  }
+
+  /** Run one cleanup pass now. Never throws — failures land in the report. */
+  async runEntryCleanup(opts?: EntryCleanupOptions): Promise<EntryCleanupReport> {
+    const report = await internalRunEntryCleanup(this.deps, opts)
+    if (report.outcome === 'completed') {
+      this.lastCleanupCompletedAt = Date.now()
+    }
+    return report
+  }
+
+  /**
+   * Debounced nudge for business delete flows — pure latency optimization
+   * (spec §5.5); the idle-gated interval is the reliability mechanism.
+   * Ungated: it fires right after a user-initiated delete.
+   */
+  scheduleCleanup(): void {
+    if (this.cleanupNudgeTimer !== undefined) return
+    this.cleanupNudgeTimer = setTimeout(() => {
+      this.cleanupNudgeTimer = undefined
+      void this.runEntryCleanup()
+    }, FileManager.CLEANUP_NUDGE_DEBOUNCE_MS)
+    this.cleanupNudgeTimer.unref()
+  }
+
+  /** Idle gate (spec §5.5): run only when idle ≥60s, with a 2h reliability floor. */
+  private async entryCleanupTick(): Promise<void> {
+    const idleSeconds = application.get('PowerService').getSystemIdleTime()
+    const overdue = Date.now() - this.lastCleanupCompletedAt > FileManager.CLEANUP_MAX_DEFER_MS
+    if (idleSeconds < FileManager.CLEANUP_IDLE_THRESHOLD_S && !overdue) return
+    await this.runEntryCleanup()
   }
 
   /**
