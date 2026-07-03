@@ -10,7 +10,7 @@
 // Preset: full + lite.
 
 import type { BackupContributor } from '@main/data/db/backup/contributor-types'
-import { columns, mirrorPk, table } from '@main/data/db/backup/dbSchemaRefs'
+import { column, columns, mirrorPk, table } from '@main/data/db/backup/dbSchemaRefs'
 import { deepFreeze } from '@main/data/db/backup/freeze'
 
 /**
@@ -36,7 +36,12 @@ export const SKILLS_CONTRIBUTOR = deepFreeze<BackupContributor>({
       }
     ],
     fileRefSourcePolicies: [],
-    jsonSoftReferences: []
+    jsonSoftReferences: [],
+    // agent_global_skill.tags holds freeform tag strings — no embedded
+    // fileId/entityId soft refs. Declared so finalize #12 exhaustiveness passes.
+    exemptJsonCols: [
+      { table: table('agent_global_skill'), column: column('tags'), reason: 'no soft refs — holds freeform skill tag strings' }
+    ]
   },
   backupPolicy: {},
   // TODO(C/D track + spec clarification): the domain spec marks SKILLS schema-only

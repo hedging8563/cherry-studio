@@ -10,7 +10,7 @@
 // Preset: full + lite (lite includes miniapps — small config rows).
 
 import type { BackupContributor } from '@main/data/db/backup/contributor-types'
-import { columns, mirrorPk, table } from '@main/data/db/backup/dbSchemaRefs'
+import { column, columns, mirrorPk, table } from '@main/data/db/backup/dbSchemaRefs'
 import { deepFreeze } from '@main/data/db/backup/freeze'
 
 /**
@@ -34,7 +34,13 @@ export const MINIAPPS_CONTRIBUTOR = deepFreeze<BackupContributor>({
       }
     ],
     fileRefSourcePolicies: [],
-    jsonSoftReferences: []
+    jsonSoftReferences: [],
+    // mini_app JSON columns hold config/region data — no embedded fileId/entityId
+    // soft refs. Declared so finalize #12 exhaustiveness passes.
+    exemptJsonCols: [
+      { table: table('mini_app'), column: column('supportedRegions'), reason: 'no soft refs — holds list of supported region codes' },
+      { table: table('mini_app'), column: column('configuration'), reason: 'no soft refs — holds miniapp runtime configuration' }
+    ]
   },
   backupPolicy: {},
   // Schema-only: no file resources, no row transform, no restoreResources.
