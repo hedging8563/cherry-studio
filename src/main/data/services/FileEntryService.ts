@@ -29,9 +29,16 @@ import type { DbOrTx } from '@data/db/types'
 import { loggerService } from '@logger'
 import { DataApiErrorFactory } from '@shared/data/api'
 import type { FileEntryListResponse, FileEntryStats } from '@shared/data/api/schemas/files'
-import type { CanonicalExternalPath, FileEntry, FileEntryId, FileEntryOrigin } from '@shared/data/types/file'
+import type {
+  CanonicalExternalPath,
+  CleanupPolicy,
+  FileEntry,
+  FileEntryId,
+  FileEntryOrigin
+} from '@shared/data/types/file'
 import {
   AbsolutePathSchema,
+  CleanupPolicySchema,
   ExternalEntrySchema,
   FileEntrySchema,
   InternalEntrySchema,
@@ -53,12 +60,14 @@ const CreateFileEntryRowSchema = z.discriminatedUnion('origin', [
     origin: z.literal('internal'),
     name: InternalEntrySchema.shape.name,
     ext: InternalEntrySchema.shape.ext,
+    cleanupPolicy: CleanupPolicySchema,
     size: InternalEntrySchema.shape.size
   }),
   z.strictObject({
     origin: z.literal('external'),
     name: ExternalEntrySchema.shape.name,
     ext: ExternalEntrySchema.shape.ext,
+    cleanupPolicy: CleanupPolicySchema,
     externalPath: ExternalEntrySchema.shape.externalPath
   })
 ])
@@ -79,6 +88,7 @@ export type CreateFileEntryRow = z.input<typeof CreateFileEntryRowSchema>
 export interface UpdateFileEntryRow {
   readonly name?: string
   readonly ext?: string | null
+  readonly cleanupPolicy?: CleanupPolicy
   readonly size?: number
   readonly deletedAt?: number | null
 }
@@ -569,6 +579,7 @@ class FileEntryServiceImpl implements FileEntryService {
         origin: parsed.origin,
         name: parsed.name,
         ext: parsed.ext,
+        cleanupPolicy: parsed.cleanupPolicy,
         size: parsed.origin === 'internal' ? parsed.size : null,
         externalPath: parsed.origin === 'external' ? parsed.externalPath : null,
         deletedAt: null,
@@ -592,11 +603,13 @@ class FileEntryServiceImpl implements FileEntryService {
     // un-parseable.
     if (values.name !== undefined) SafeNameSchema.parse(values.name)
     if (values.ext !== undefined) InternalEntrySchema.shape.ext.parse(values.ext)
+    if (values.cleanupPolicy !== undefined) CleanupPolicySchema.parse(values.cleanupPolicy)
     const updates: Partial<typeof fileEntryTable.$inferInsert> = {
       updatedAt: Date.now()
     }
     if (values.name !== undefined) updates.name = values.name
     if (values.ext !== undefined) updates.ext = values.ext
+    if (values.cleanupPolicy !== undefined) updates.cleanupPolicy = values.cleanupPolicy
     if (values.size !== undefined) updates.size = values.size
     if (values.deletedAt !== undefined) updates.deletedAt = values.deletedAt
     const rows = tx.update(fileEntryTable).set(updates).where(eq(fileEntryTable.id, id)).returning().all()

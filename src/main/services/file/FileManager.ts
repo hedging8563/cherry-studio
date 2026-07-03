@@ -134,7 +134,7 @@ import { loggerService } from '@logger'
 import { BaseService, Injectable, Phase, ServicePhase } from '@main/core/lifecycle'
 import { remove as fsRemove, stat as fsStat } from '@main/utils/file/fs'
 import type { DanglingState, FileEntry, FileEntryId } from '@shared/data/types/file'
-import { AbsolutePathSchema, FileEntryIdSchema } from '@shared/data/types/file'
+import { AbsolutePathSchema, CleanupPolicySchema, FileEntryIdSchema } from '@shared/data/types/file'
 import { SafeNameSchema } from '@shared/data/types/file/essential'
 import { IpcChannel } from '@shared/IpcChannel'
 import type {
@@ -232,18 +232,27 @@ export type EnsureExternalEntryParams = EnsureExternalEntryIpcParams
 const SafeExtNullableSchema = SafeExtSchema.nullable()
 
 export const CreateInternalEntryIpcSchema = z.discriminatedUnion('source', [
-  z.strictObject({ source: z.literal('path'), path: AbsolutePathSchema }),
-  z.strictObject({ source: z.literal('url'), url: z.url() }),
-  z.strictObject({ source: z.literal('base64'), data: z.string().min(1), name: SafeNameSchema.optional() }),
+  z.strictObject({ source: z.literal('path'), path: AbsolutePathSchema, cleanupPolicy: CleanupPolicySchema }),
+  z.strictObject({ source: z.literal('url'), url: z.url(), cleanupPolicy: CleanupPolicySchema }),
+  z.strictObject({
+    source: z.literal('base64'),
+    data: z.string().min(1),
+    name: SafeNameSchema.optional(),
+    cleanupPolicy: CleanupPolicySchema
+  }),
   z.strictObject({
     source: z.literal('bytes'),
     data: z.instanceof(Uint8Array),
     name: SafeNameSchema,
-    ext: SafeExtNullableSchema
+    ext: SafeExtNullableSchema,
+    cleanupPolicy: CleanupPolicySchema
   })
 ])
 
-export const EnsureExternalEntryIpcSchema = z.strictObject({ externalPath: AbsolutePathSchema })
+export const EnsureExternalEntryIpcSchema = z.strictObject({
+  externalPath: AbsolutePathSchema,
+  cleanupPolicy: CleanupPolicySchema
+})
 
 export const GetPhysicalPathIpcSchema = z.strictObject({ id: FileEntryIdSchema })
 

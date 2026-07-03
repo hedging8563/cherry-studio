@@ -969,6 +969,7 @@ describe('FileEntryService', () => {
       const entry = fileEntryService.create({
         id,
         origin: 'internal',
+        cleanupPolicy: 'manual',
         name: 'note',
         ext: 'txt',
         size: 11
@@ -985,6 +986,7 @@ describe('FileEntryService', () => {
     it('inserts an external row with size=null in DB; size absent on BO projection', async () => {
       const entry = fileEntryService.create({
         origin: 'external',
+        cleanupPolicy: 'manual',
         name: 'doc',
         ext: 'pdf',
         externalPath: '/Users/me/doc.pdf'
@@ -1002,6 +1004,7 @@ describe('FileEntryService', () => {
       expect(() =>
         fileEntryService.create({
           origin: 'external',
+          cleanupPolicy: 'manual',
           name: 'doc',
           ext: 'pdf',
           size: 100,
@@ -1017,6 +1020,7 @@ describe('FileEntryService', () => {
         fileEntryService.create({
           id,
           origin: 'internal',
+          cleanupPolicy: 'manual',
           name: 'payload',
           ext: 'exe ',
           size: 1
@@ -1033,6 +1037,7 @@ describe('FileEntryService', () => {
         fileEntryService.create({
           id,
           origin: 'internal',
+          cleanupPolicy: 'manual',
           name: 'note',
           ext: 'txt',
           size: 1,
@@ -1045,7 +1050,7 @@ describe('FileEntryService', () => {
   describe('update', () => {
     it('updates name and refreshes updatedAt', async () => {
       const id = '019606a0-0000-7000-8000-000000000b01' as FileEntryId
-      fileEntryService.create({ id, origin: 'internal', name: 'old', ext: 'txt', size: 1 })
+      fileEntryService.create({ id, origin: 'internal', cleanupPolicy: 'manual', name: 'old', ext: 'txt', size: 1 })
       const original = fileEntryService.getById(id)
       await new Promise((r) => setTimeout(r, 5))
       const updated = fileEntryService.update(id, { name: 'new' })
@@ -1074,7 +1079,7 @@ describe('FileEntryService', () => {
 
     it('updates deletedAt for soft delete', async () => {
       const id = '019606a0-0000-7000-8000-000000000b02' as FileEntryId
-      fileEntryService.create({ id, origin: 'internal', name: 'tmp', ext: 'txt', size: 1 })
+      fileEntryService.create({ id, origin: 'internal', cleanupPolicy: 'manual', name: 'tmp', ext: 'txt', size: 1 })
       const deletedAt = Date.now()
       const updated = fileEntryService.update(id, { deletedAt })
       if (updated.origin !== 'internal') throw new Error('expected internal entry')
@@ -1084,6 +1089,7 @@ describe('FileEntryService', () => {
     it('throws when setting deletedAt on an external row (CHECK fe_external_no_delete)', async () => {
       const entry = fileEntryService.create({
         origin: 'external',
+        cleanupPolicy: 'manual',
         name: 'ext',
         ext: 'txt',
         externalPath: '/x/y.txt'
@@ -1099,7 +1105,7 @@ describe('FileEntryService', () => {
       // row back with a raw SELECT after the rejection and asserting the
       // `name` column is unchanged.
       const id = '019606a0-0000-7000-8000-000000000b04' as FileEntryId
-      fileEntryService.create({ id, origin: 'internal', name: 'safe', ext: 'txt', size: 1 })
+      fileEntryService.create({ id, origin: 'internal', cleanupPolicy: 'manual', name: 'safe', ext: 'txt', size: 1 })
 
       expect(() => fileEntryService.update(id, { name: 'has\0null' })).toThrow()
 
@@ -1109,7 +1115,7 @@ describe('FileEntryService', () => {
 
     it('rejects unsafe ext BEFORE the SQL UPDATE commits', async () => {
       const id = '019606a0-0000-7000-8000-000000000b05' as FileEntryId
-      fileEntryService.create({ id, origin: 'internal', name: 'safe', ext: 'txt', size: 1 })
+      fileEntryService.create({ id, origin: 'internal', cleanupPolicy: 'manual', name: 'safe', ext: 'txt', size: 1 })
 
       expect(() => fileEntryService.update(id, { ext: 'txt.' })).toThrow()
 
@@ -1137,6 +1143,7 @@ describe('FileEntryService', () => {
       fileEntryService.create({
         id: active,
         origin: 'internal',
+        cleanupPolicy: 'manual',
         name: 'a',
         ext: 'txt',
         size: 1
@@ -1144,6 +1151,7 @@ describe('FileEntryService', () => {
       fileEntryService.create({
         id: trashed,
         origin: 'internal',
+        cleanupPolicy: 'manual',
         name: 't',
         ext: 'txt',
         size: 1
@@ -1168,6 +1176,7 @@ describe('FileEntryService', () => {
     it('returns the refreshed row with new path and name', async () => {
       const entry = fileEntryService.create({
         origin: 'external',
+        cleanupPolicy: 'manual',
         name: 'old-doc',
         ext: 'pdf',
         externalPath: '/Users/me/old-doc.pdf'
@@ -1216,6 +1225,7 @@ describe('FileEntryService', () => {
       // `rowToFileEntry` parse. Raw SELECT proves the row stayed unchanged.
       const entry = fileEntryService.create({
         origin: 'external',
+        cleanupPolicy: 'manual',
         name: 'safe',
         ext: 'txt',
         externalPath: '/Users/me/safe.txt'
@@ -1237,6 +1247,7 @@ describe('FileEntryService', () => {
       // caller went through `canonicalizeExternalPath` or `as`-cast.
       const entry = fileEntryService.create({
         origin: 'external',
+        cleanupPolicy: 'manual',
         name: 'safe',
         ext: 'txt',
         externalPath: '/Users/me/safe.txt'
@@ -1258,12 +1269,14 @@ describe('FileEntryService', () => {
       // otherwise see this as an unhandled rejection.
       fileEntryService.create({
         origin: 'external',
+        cleanupPolicy: 'manual',
         name: 'a',
         ext: 'txt',
         externalPath: '/Users/me/a.txt'
       })
       const b = fileEntryService.create({
         origin: 'external',
+        cleanupPolicy: 'manual',
         name: 'b',
         ext: 'txt',
         externalPath: '/Users/me/b.txt'
@@ -1295,12 +1308,20 @@ describe('FileEntryService', () => {
       withWriteTx.mockClear()
 
       const internalId = '019606a0-0000-7000-8000-000000000c10' as FileEntryId
-      fileEntryService.create({ id: internalId, origin: 'internal', name: 'tx', ext: 'txt', size: 1 })
+      fileEntryService.create({
+        id: internalId,
+        origin: 'internal',
+        cleanupPolicy: 'manual',
+        name: 'tx',
+        ext: 'txt',
+        size: 1
+      })
       fileEntryService.update(internalId, { name: 'tx-renamed' })
       fileEntryService.delete(internalId)
 
       const external = fileEntryService.create({
         origin: 'external',
+        cleanupPolicy: 'manual',
         name: 'ext-tx',
         ext: 'txt',
         externalPath: '/Users/me/ext-tx.txt'
@@ -1319,7 +1340,7 @@ describe('FileEntryService', () => {
 
     it('removes an existing row', async () => {
       const id = '019606a0-0000-7000-8000-000000000c01' as FileEntryId
-      fileEntryService.create({ id, origin: 'internal', name: 'd', ext: 'txt', size: 1 })
+      fileEntryService.create({ id, origin: 'internal', cleanupPolicy: 'manual', name: 'd', ext: 'txt', size: 1 })
       fileEntryService.delete(id)
       expect(fileEntryService.findById(id)).toBeNull()
     })
@@ -1399,6 +1420,7 @@ describe('FileEntryService', () => {
       fileEntryService.create({
         id: referenced,
         origin: 'internal',
+        cleanupPolicy: 'manual',
         name: 'r',
         ext: 'txt',
         size: 1
@@ -1406,6 +1428,7 @@ describe('FileEntryService', () => {
       fileEntryService.create({
         id: orphan,
         origin: 'internal',
+        cleanupPolicy: 'manual',
         name: 'o',
         ext: 'txt',
         size: 1
@@ -1423,6 +1446,7 @@ describe('FileEntryService', () => {
       fileEntryService.create({
         id: referenced,
         origin: 'internal',
+        cleanupPolicy: 'manual',
         name: 'chat-ref',
         ext: 'txt',
         size: 1
@@ -1430,6 +1454,7 @@ describe('FileEntryService', () => {
       fileEntryService.create({
         id: orphan,
         origin: 'internal',
+        cleanupPolicy: 'manual',
         name: 'orphan',
         ext: 'txt',
         size: 1
@@ -1446,6 +1471,7 @@ describe('FileEntryService', () => {
       fileEntryService.create({
         id: referenced,
         origin: 'internal',
+        cleanupPolicy: 'manual',
         name: 'both-ref',
         ext: 'txt',
         size: 1
@@ -1453,6 +1479,7 @@ describe('FileEntryService', () => {
       fileEntryService.create({
         id: orphan,
         origin: 'internal',
+        cleanupPolicy: 'manual',
         name: 'orphan',
         ext: 'txt',
         size: 1
@@ -1469,12 +1496,14 @@ describe('FileEntryService', () => {
       fileEntryService.create({
         id: internalOrphan,
         origin: 'internal',
+        cleanupPolicy: 'manual',
         name: 'i',
         ext: 'txt',
         size: 1
       })
       const externalOrphan = fileEntryService.create({
         origin: 'external',
+        cleanupPolicy: 'manual',
         name: 'e',
         ext: 'txt',
         externalPath: '/abs/orphan.txt' as CanonicalExternalPath
@@ -1492,6 +1521,7 @@ describe('FileEntryService', () => {
       fileEntryService.create({
         id,
         origin: 'internal',
+        cleanupPolicy: 'manual',
         name: 't',
         ext: 'txt',
         size: 1
@@ -1621,10 +1651,27 @@ describe('FileEntryService', () => {
   })
 
   describe('cleanupPolicy', () => {
-    it('defaults to manual on the BO when the insert omits it', () => {
+    it('defaults to manual on the BO when the insert omits it', async () => {
+      // `cleanupPolicy` is now required on `fileEntryService.create` (see
+      // `CreateFileEntryRowSchema`), so the DB-default coverage this test
+      // pins must go around the service and insert directly — the DB column
+      // default (`DEFAULT 'manual'`) is what's under test here, not the
+      // service-layer validation.
       const id = '019606a0-0000-7000-8000-00000000cc01' as FileEntryId
-      const entry = fileEntryService.create({ id, origin: 'internal', name: 'a', ext: 'txt', size: 1 })
-      expect(entry.cleanupPolicy).toBe('manual')
+      const now = Date.now()
+      await dbh.db.insert(fileEntryTable).values({
+        id,
+        origin: 'internal',
+        name: 'a',
+        ext: 'txt',
+        size: 1,
+        externalPath: null,
+        deletedAt: null,
+        createdAt: now,
+        updatedAt: now
+      })
+      const entry = fileEntryService.findById(id)
+      expect(entry?.cleanupPolicy).toBe('manual')
     })
 
     it('rejects invalid cleanup_policy values at the DB layer', async () => {

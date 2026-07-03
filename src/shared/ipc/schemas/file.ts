@@ -1,5 +1,6 @@
 import {
   AbsolutePathSchema,
+  CleanupPolicySchema,
   DanglingStateSchema,
   FileEntryIdSchema,
   FileEntrySchema,
@@ -41,14 +42,20 @@ const batchCreateResultSchema = z.strictObject({
 // future drift; refactor them to share one source of truth before migrating the
 // remaining File IPC surface.
 const createInternalEntryInputSchema = z.discriminatedUnion('source', [
-  z.strictObject({ source: z.literal('path'), path: AbsolutePathSchema }),
-  z.strictObject({ source: z.literal('url'), url: z.url() }),
-  z.strictObject({ source: z.literal('base64'), data: z.string().min(1), name: SafeNameSchema.optional() }),
+  z.strictObject({ source: z.literal('path'), path: AbsolutePathSchema, cleanupPolicy: CleanupPolicySchema }),
+  z.strictObject({ source: z.literal('url'), url: z.url(), cleanupPolicy: CleanupPolicySchema }),
+  z.strictObject({
+    source: z.literal('base64'),
+    data: z.string().min(1),
+    name: SafeNameSchema.optional(),
+    cleanupPolicy: CleanupPolicySchema
+  }),
   z.strictObject({
     source: z.literal('bytes'),
     data: z.instanceof(Uint8Array),
     name: SafeNameSchema,
-    ext: SafeExtSchema.nullable()
+    ext: SafeExtSchema.nullable(),
+    cleanupPolicy: CleanupPolicySchema
   })
 ])
 
