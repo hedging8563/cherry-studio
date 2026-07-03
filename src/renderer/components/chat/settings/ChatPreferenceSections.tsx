@@ -257,7 +257,7 @@ const ChatPreferenceSections: FC<ChatPreferenceSectionsProps> = ({ sectionClassN
           <SettingRow>
             <SettingRowTitleSmall>{t('message.message.style.label')}</SettingRowTitleSmall>
             <Select value={messageStyle} onValueChange={setMessageStyle}>
-              <SelectTrigger size="sm" className="w-[220px] text-sm">
+              <SelectTrigger size="sm" className="min-w-0 max-w-56 flex-1 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="text-sm">
@@ -272,7 +272,7 @@ const ChatPreferenceSections: FC<ChatPreferenceSectionsProps> = ({ sectionClassN
           <SettingRow>
             <SettingRowTitleSmall>{t('message.message.multi_model_style.label')}</SettingRowTitleSmall>
             <Select value={multiModelMessageStyle} onValueChange={setMultiModelMessageStyle}>
-              <SelectTrigger size="sm" className="w-[220px] text-sm">
+              <SelectTrigger size="sm" className="min-w-0 max-w-56 flex-1 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="text-sm">
@@ -294,7 +294,7 @@ const ChatPreferenceSections: FC<ChatPreferenceSectionsProps> = ({ sectionClassN
           <SettingRow>
             <SettingRowTitleSmall>{t('settings.messages.navigation.label')}</SettingRowTitleSmall>
             <Select value={messageNavigation} onValueChange={setMessageNavigation}>
-              <SelectTrigger size="sm" className="w-[220px] text-sm">
+              <SelectTrigger size="sm" className="min-w-0 max-w-56 flex-1 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="text-sm">
@@ -345,7 +345,7 @@ const ChatPreferenceSections: FC<ChatPreferenceSectionsProps> = ({ sectionClassN
           <SettingRow>
             <SettingRowTitleSmall>{t('message.message.code_style')}</SettingRowTitleSmall>
             <Select value={codeStyle} onValueChange={onCodeStyleChange}>
-              <SelectTrigger size="sm" className="w-[220px] text-sm">
+              <SelectTrigger size="sm" className="min-w-0 max-w-56 flex-1 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="text-sm">

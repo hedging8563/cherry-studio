@@ -375,7 +375,7 @@ const MigrationApp: React.FC = () => {
           <div className="space-y-6">
             <TopContent>
               <StageBadge tone="neutral">
-                <Rocket size={28} strokeWidth={1.5} />
+                <Rocket size={28} />
               </StageBadge>
               <h1 className="font-semibold text-2xl text-foreground tracking-tight">
                 {t('migration.introduction.title')}
@@ -434,7 +434,7 @@ const MigrationApp: React.FC = () => {
           <div className="space-y-4">
             <TopContent>
               <StageBadge tone="primary">
-                <Loader2 size={26} strokeWidth={1.5} className="animate-spin" />
+                <Loader2 size={26} className="animate-spin" />
               </StageBadge>
               <h2 className="font-semibold text-foreground text-lg tracking-tight">{t('migration.migration.title')}</h2>
               <p className="mt-1.5 text-foreground-muted text-sm">{progressMessage}</p>
@@ -525,7 +525,7 @@ const MigrationApp: React.FC = () => {
           <div className="space-y-5">
             <TopContent>
               <StageBadge tone="destructive">
-                <AlertTriangle size={26} strokeWidth={1.5} />
+                <AlertTriangle size={26} />
               </StageBadge>
               <h2 className="font-semibold text-foreground text-lg tracking-tight">{t('migration.error.title')}</h2>
               <p className="mt-1.5 text-foreground-muted text-sm leading-relaxed">{t('migration.error.description')}</p>
@@ -560,7 +560,7 @@ const MigrationApp: React.FC = () => {
           <div className="mx-auto w-full max-w-115 space-y-4">
             <div className="text-center">
               <StageBadge tone="warning">
-                <AlertTriangle size={26} strokeWidth={1.5} />
+                <AlertTriangle size={26} />
               </StageBadge>
               <h2 className="font-semibold text-foreground text-lg tracking-tight">
                 {t('migration.version_incompatible.title')}
@@ -615,7 +615,7 @@ const MigrationApp: React.FC = () => {
               aria-label={t(themeLabelKey[themeMode] ?? themeLabelKey.system)}
               onClick={toggleTheme}
               className="text-foreground-muted hover:bg-muted/40 hover:text-foreground">
-              <ThemeIcon className="size-3.5" strokeWidth={1.6} />
+              <ThemeIcon className="size-3.5" />
             </Button>
           </Tooltip>
         </div>

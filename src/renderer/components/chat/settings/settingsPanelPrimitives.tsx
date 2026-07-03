@@ -10,7 +10,9 @@ export const SettingRowTitleSmall = ({
   hint,
   ...rest
 }: ComponentPropsWithoutRef<typeof SettingRowTitle> & { hint?: string }) => (
-  <SettingRowTitle className={cn('min-w-0 gap-1.5 text-foreground text-sm leading-4.5', className)} {...rest}>
+  <SettingRowTitle
+    className={cn('text-(length:--font-size-body-xs) min-w-0 gap-1.5 text-foreground leading-4.5', className)}
+    {...rest}>
     <span className="min-w-0 truncate">{children}</span>
     {hint && (
       <Tooltip content={hint} placement="top" className="w-fit max-w-sm px-2.5 py-1.5 text-xs leading-relaxed">

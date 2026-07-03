@@ -1,4 +1,13 @@
-import { Input, Popover, PopoverContent, PopoverTrigger, Switch, usePortalContainer } from '@cherrystudio/ui'
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Switch,
+  usePortalContainer
+} from '@cherrystudio/ui'
 import { cn } from '@cherrystudio/ui/lib/utils'
 import { Search } from 'lucide-react'
 import {
@@ -443,29 +452,34 @@ export function SelectorShell({
               )}
               data-selector-shell-panel="true">
               {search ? (
-                <div
-                  ref={setSearchElement}
-                  className="flex items-center gap-2 border-border border-b px-3 py-1"
-                  data-selector-shell-chrome="search">
-                  <Search className="pointer-events-none size-3.25 shrink-0 text-muted-foreground/50" />
-                  <Input
-                    ref={search.inputRef}
-                    value={search.value}
-                    autoFocus={search.autoFocus ?? true}
-                    spellCheck={search.spellCheck ?? false}
-                    placeholder={search.placeholder}
-                    aria-activedescendant={search.activeDescendant}
-                    aria-controls={search.ariaControls}
+                <div ref={setSearchElement} className="px-3 py-2" data-selector-shell-chrome="search">
+                  <InputGroup
                     className={cn(
-                      'h-[var(--cs-size-xs)] flex-1 border-0 bg-transparent p-0 shadow-none transition-none',
-                      'text-xs md:text-xs',
-                      'focus-visible:border-transparent focus-visible:ring-0',
-                      'placeholder:text-muted-foreground/40'
-                    )}
-                    data-testid={search.dataTestId}
-                    onChange={(event) => search.onChange(event.target.value)}
-                    onKeyDown={search.onKeyDown}
-                  />
+                      'rounded-full border-border-subtle',
+                      'has-[[data-slot=input-group-control]:focus-visible]:border-border-subtle',
+                      'has-[[data-slot=input-group-control]:focus-visible]:ring-0'
+                    )}>
+                    <InputGroupAddon>
+                      <Search className="pointer-events-none size-3.25 shrink-0 text-muted-foreground/50" />
+                    </InputGroupAddon>
+                    <InputGroupInput
+                      ref={search.inputRef}
+                      value={search.value}
+                      autoFocus={search.autoFocus ?? true}
+                      spellCheck={search.spellCheck ?? false}
+                      placeholder={search.placeholder}
+                      aria-activedescendant={search.activeDescendant}
+                      aria-controls={search.ariaControls}
+                      className={cn(
+                        'h-[var(--cs-size-xs)] transition-none',
+                        'text-xs md:text-xs',
+                        'placeholder:text-muted-foreground/40'
+                      )}
+                      data-testid={search.dataTestId}
+                      onChange={(event) => search.onChange(event.target.value)}
+                      onKeyDown={search.onKeyDown}
+                    />
+                  </InputGroup>
                 </div>
               ) : null}
 
@@ -484,7 +498,7 @@ export function SelectorShell({
                   className="flex items-center justify-between gap-3 border-border border-b px-3 py-2"
                   data-selector-shell-chrome="multi-select"
                   data-testid={multiSelect.rowTestId}>
-                  <div className="flex min-w-0 flex-1 items-center gap-1 text-[10px] text-muted-foreground">
+                  <div className="text-(length:--font-size-body-2xs) flex min-w-0 flex-1 items-center gap-1 text-muted-foreground">
                     <span className="truncate">{multiSelect.label}</span>
                     {multiSelect.hint ? (
                       <span className="truncate text-muted-foreground/60">{multiSelect.hint}</span>

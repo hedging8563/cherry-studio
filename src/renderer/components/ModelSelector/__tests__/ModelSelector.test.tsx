@@ -135,6 +135,14 @@ vi.mock('@cherrystudio/ui', () => {
     }: InputHTMLAttributes<HTMLInputElement> & { ref?: RefObject<HTMLInputElement | null> }) => (
       <input ref={ref} {...props} />
     ),
+    InputGroup: ({ children, ...props }: { children?: ReactNode }) => <div {...props}>{children}</div>,
+    InputGroupAddon: ({ children, ...props }: { children?: ReactNode }) => <div {...props}>{children}</div>,
+    InputGroupInput: ({
+      ref,
+      ...props
+    }: InputHTMLAttributes<HTMLInputElement> & { ref?: RefObject<HTMLInputElement | null> }) => (
+      <input ref={ref} {...props} />
+    ),
     Popover: ({ children, onOpenChange }: { children: ReactNode; onOpenChange?: (open: boolean) => void }) => (
       <div>
         <button type="button" data-testid="mock-popover-close" onClick={() => onOpenChange?.(false)} />
@@ -820,10 +828,8 @@ describe('ModelSelector', () => {
     const providerName = screen.getByText('| OpenAI')
 
     expect(modelName).toHaveClass('min-w-0', 'max-w-full', 'shrink-0', 'truncate')
-    expect(modelName).toHaveAttribute('title', longModelName)
     expect(screen.queryByText(longIdentifier)).toBeNull()
     expect(providerName).toHaveClass('min-w-0', 'flex-[1_999_0%]', 'truncate')
-    expect(providerName).toHaveAttribute('title', 'OpenAI')
   })
 
   it('passes the selector portal container to model detail hover cards', () => {

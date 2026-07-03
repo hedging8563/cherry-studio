@@ -2,6 +2,7 @@ import { cacheService } from '@data/CacheService'
 import { usePreference } from '@data/hooks/usePreference'
 import db from '@renderer/databases/db'
 import { useAgentSessionAutoRenameSync } from '@renderer/hooks/agent/useSession'
+import useMacTransparentWindow from '@renderer/hooks/useMacTransparentWindow'
 import { useTopicAutoRenameSync } from '@renderer/hooks/useTopic'
 import i18n, { setDayjsLocale } from '@renderer/i18n/resolver'
 import { ipcApi } from '@renderer/ipc'
@@ -42,6 +43,7 @@ export function useAppInit() {
 
   const savedAvatar = useLiveQuery(() => db.settings.get('image://avatar'))
   const navBackgroundColor = useNavBackgroundColor()
+  const isMacTransparentWindow = useMacTransparentWindow()
 
   useFullScreenNotice()
   useTopicAutoRenameSync()
@@ -66,8 +68,11 @@ export function useAppInit() {
   }, [language])
 
   useEffect(() => {
-    window.root.style.background = navBackgroundColor
-  }, [navBackgroundColor])
+    // In mac transparent mode the shell owns the wash (sidebar tint while the
+    // window is key, opaque sidebar when blurred — see AppShell); #root stays
+    // transparent so the native vibrancy can show through the tint.
+    window.root.style.background = isMacTransparentWindow ? 'transparent' : navBackgroundColor
+  }, [isMacTransparentWindow, navBackgroundColor])
 
   useEffect(() => {
     // set app paths

@@ -82,7 +82,7 @@ export function FileTreeRow(props: FileTreeRowProps) {
       title={node.name}
       style={indent}
       className={cn(
-        'group relative flex select-none items-center gap-1.5 rounded-3xs py-1 pr-2 text-left text-sm',
+        'group relative flex select-none items-center gap-1.5 rounded-md py-1 pr-2 text-left text-sm',
         'transition-colors',
         isFolder
           ? 'text-foreground/75 hover:bg-accent/50 hover:text-foreground'

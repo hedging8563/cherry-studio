@@ -33,7 +33,7 @@ import ListItem from '@renderer/components/ListItem'
 import { WorkspaceSelector } from '@renderer/components/resourceCatalog/selectors'
 import Scrollbar from '@renderer/components/Scrollbar'
 import {
-  SettingDivider,
+  SettingCard,
   SettingGroup,
   SettingRow,
   SettingRowTitle,
@@ -163,65 +163,77 @@ const TaskScheduleControls: FC<{
   }
 
   return (
-    <div className="space-y-5">
-      <div className="space-y-3">
-        <SettingRowTitle>{t('agent.cherryClaw.tasks.frequency.label')}</SettingRowTitle>
-        <SegmentedControl
-          size="sm"
-          value={value.kind}
-          disabled={disabled}
-          onValueChange={(kind) => onChange({ ...value, kind, value: '' })}
-          options={scheduleTypeOptions}
-          className="max-w-full"
-        />
+    <div className="space-y-3">
+      <div className="space-y-2">
+        <SettingRow>
+          <SettingRowTitle>{t('agent.cherryClaw.tasks.frequency.label')}</SettingRowTitle>
+          <SegmentedControl
+            size="sm"
+            value={value.kind}
+            disabled={disabled}
+            onValueChange={(kind) => onChange({ ...value, kind, value: '' })}
+            options={scheduleTypeOptions}
+            className="max-w-full"
+          />
+        </SettingRow>
 
         {value.kind === 'interval' && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-foreground text-sm">{t('agent.cherryClaw.tasks.frequency.everyPrefix')}</span>
-            <UIInput
-              type="number"
-              min={1}
-              value={value.value}
-              onChange={(e) => onChange({ ...value, value: e.target.value })}
-              onBlur={() => commitTrigger('interval', value.value)}
-              placeholder={t('agent.cherryClaw.tasks.intervalPlaceholder')}
-              disabled={disabled}
-              className="w-24"
-            />
-            <span className="text-foreground text-sm">{t('agent.cherryClaw.tasks.frequency.everySuffix')}</span>
-          </div>
+          <SettingRow>
+            <SettingRowTitle>{t('agent.cherryClaw.tasks.frequency.interval')}</SettingRowTitle>
+            <div className="flex items-center gap-2">
+              <UIInput
+                type="number"
+                min={1}
+                value={value.value}
+                onChange={(e) => onChange({ ...value, value: e.target.value })}
+                onBlur={() => commitTrigger('interval', value.value)}
+                placeholder={t('agent.cherryClaw.tasks.intervalPlaceholder')}
+                disabled={disabled}
+                className="w-24"
+              />
+              <span className="text-muted-foreground text-xs">{t('agent.cherryClaw.tasks.intervalUnit')}</span>
+            </div>
+          </SettingRow>
         )}
 
         {value.kind === 'once' && (
-          <DateTimePicker
-            value={parseScheduleDate(value.value)}
-            granularity="second"
-            format="yyyy-MM-dd HH:mm:ss"
-            placeholder={t('agent.cherryClaw.tasks.oncePlaceholder')}
-            triggerClassName="w-72 max-w-full"
-            onChange={(date) => {
-              if (!date) return
-              const nextValue = date.toISOString()
-              onChange({ ...value, value: nextValue })
-              commitTrigger('once', nextValue)
-            }}
-            disabled={disabled}
-          />
+          <SettingRow>
+            <SettingRowTitle>{t('agent.cherryClaw.tasks.frequency.onceAt')}</SettingRowTitle>
+            <DateTimePicker
+              value={parseScheduleDate(value.value)}
+              granularity="second"
+              format="yyyy-MM-dd HH:mm:ss"
+              placeholder={t('agent.cherryClaw.tasks.oncePlaceholder')}
+              triggerClassName="w-72 max-w-full"
+              popoverClassName="w-(--radix-popover-trigger-width) min-w-fit"
+              calendarProps={{ className: 'self-center' }}
+              onChange={(date) => {
+                if (!date) return
+                const nextValue = date.toISOString()
+                onChange({ ...value, value: nextValue })
+                commitTrigger('once', nextValue)
+              }}
+              disabled={disabled}
+            />
+          </SettingRow>
         )}
 
         {value.kind === 'cron' && (
-          <UIInput
-            value={value.value}
-            onChange={(e) => onChange({ ...value, value: e.target.value })}
-            onBlur={() => commitTrigger('cron', value.value)}
-            placeholder={t('agent.cherryClaw.tasks.cronPlaceholder')}
-            disabled={disabled}
-            className="w-72 max-w-full"
-          />
+          <SettingRow>
+            <SettingRowTitle>{t('agent.cherryClaw.tasks.frequency.cronExpression')}</SettingRowTitle>
+            <UIInput
+              value={value.value}
+              onChange={(e) => onChange({ ...value, value: e.target.value })}
+              onBlur={() => commitTrigger('cron', value.value)}
+              placeholder={t('agent.cherryClaw.tasks.cronPlaceholder')}
+              disabled={disabled}
+              className="w-72 max-w-full"
+            />
+          </SettingRow>
         )}
       </div>
 
-      <div className="space-y-3">
+      <SettingRow>
         <SettingRowTitle>{t('agent.cherryClaw.tasks.timeout.label')}</SettingRowTitle>
         <div className="flex items-center gap-2">
           <UIInput
@@ -236,7 +248,7 @@ const TaskScheduleControls: FC<{
           />
           <span className="text-muted-foreground text-xs">{t('agent.cherryClaw.tasks.intervalUnit')}</span>
         </div>
-      </div>
+      </SettingRow>
     </div>
   )
 }
@@ -257,13 +269,12 @@ const TaskChannelSelector: FC<{
 
   return (
     <>
-      <SettingRow className="gap-2" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+      <SettingRow>
         <SettingRowTitle>{t('agent.cherryClaw.tasks.channels.label')}</SettingRowTitle>
         <Combobox
           multiple
           size="default"
-          className="w-full"
-          width="100%"
+          className="w-72 max-w-full"
           value={channelIds}
           disabled={disabled}
           onChange={(value) => {
@@ -289,7 +300,7 @@ const TaskChannelSelector: FC<{
           )}
         />
         {hasNoChatIds && (
-          <div className="mt-2 inline-flex items-start gap-2 rounded-lg border border-warning/25 bg-warning/8 px-3 py-2 text-warning text-xs">
+          <div className="flex w-full items-start gap-2 rounded-lg border border-warning/25 bg-warning/8 px-3 py-2 text-warning text-xs">
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
             <span>{t('agent.cherryClaw.tasks.channels.noActiveChatIds')}</span>
           </div>
@@ -469,126 +480,130 @@ const TaskDetail: FC<{
             </Popover>
           </div>
         </SettingTitle>
-        <SettingDivider />
-        <div className="flex flex-wrap items-center gap-3 text-xs">
-          <Badge className={badgeColorClass(task.trigger.kind)}>
-            {scheduleTypeLabels[task.trigger.kind] ?? task.trigger.kind}
-          </Badge>
-          <span className="inline-flex items-center gap-1 text-foreground-muted">
-            <Clock size={12} />
-            {formatScheduleValue()}
-          </span>
-          {task.lastRun && (
+        <SettingCard>
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            <Badge className={badgeColorClass(task.trigger.kind)}>
+              {scheduleTypeLabels[task.trigger.kind] ?? task.trigger.kind}
+            </Badge>
             <span className="inline-flex items-center gap-1 text-foreground-muted">
-              <History size={12} />
-              {t('agent.cherryClaw.tasks.lastRun')}: {formatDateTime(task.lastRun)}
+              <Clock size={12} />
+              {formatScheduleValue()}
             </span>
-          )}
-          {task.nextRun && (
-            <span className="inline-flex items-center gap-1 text-foreground-muted">
-              <CalendarClock size={12} />
-              {t('agent.cherryClaw.tasks.nextRun')}: {formatDateTime(task.nextRun)}
-            </span>
-          )}
-        </div>
+            {task.lastRun && (
+              <span className="inline-flex items-center gap-1 text-foreground-muted">
+                <History size={12} />
+                {t('agent.cherryClaw.tasks.lastRun')}: {formatDateTime(task.lastRun)}
+              </span>
+            )}
+            {task.nextRun && (
+              <span className="inline-flex items-center gap-1 text-foreground-muted">
+                <CalendarClock size={12} />
+                {t('agent.cherryClaw.tasks.nextRun')}: {formatDateTime(task.nextRun)}
+              </span>
+            )}
+          </div>
+        </SettingCard>
       </SettingGroup>
 
       {/* Editable fields card */}
       <SettingGroup theme={theme}>
         <SettingTitle>{t('settings.general.title')}</SettingTitle>
-        <SettingDivider />
-        <div className="space-y-5">
-          <SettingRow className="gap-2" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-            <SettingRowTitle>{t('agent.cherryClaw.tasks.name.label')}</SettingRowTitle>
-            <UIInput
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onBlur={() => name.trim() && name !== task.name && saveField({ name: name.trim() })}
-              disabled={isCompleted}
-            />
-          </SettingRow>
-          {/* Agent reassignment was never supported by the IPC contract (strict
+        <SettingCard className="border-none *:px-0">
+          <div className="space-y-3">
+            <SettingRow>
+              <SettingRowTitle>{t('agent.cherryClaw.tasks.name.label')}</SettingRowTitle>
+              <UIInput
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onBlur={() => name.trim() && name !== task.name && saveField({ name: name.trim() })}
+                disabled={isCompleted}
+                className="w-72 max-w-full"
+              />
+            </SettingRow>
+            {/* Agent reassignment was never supported by the IPC contract (strict
               schema dropped the field). Owning-agent display lives in the
               header card. */}
-          <SettingRow className="gap-2" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-            <div className="flex items-center justify-between">
-              <SettingRowTitle>{t('agent.cherryClaw.tasks.prompt.label')}</SettingRowTitle>
-              {!isCompleted && (
-                <Tooltip title={t('agent.cherryClaw.tasks.prompt.expand')}>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="shadow-none"
-                    onClick={() => setPromptModalOpen(true)}>
-                    <Maximize2 size={13} />
-                  </Button>
-                </Tooltip>
-              )}
-            </div>
-            <Textarea.Input
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              onBlur={() => prompt.trim() && prompt !== task.prompt && saveField({ prompt: prompt.trim() })}
+            <SettingRow className="gap-2" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+              <div className="flex items-center justify-between">
+                <SettingRowTitle>{t('agent.cherryClaw.tasks.prompt.label')}</SettingRowTitle>
+                {!isCompleted && (
+                  <Tooltip title={t('agent.cherryClaw.tasks.prompt.expand')}>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="shadow-none"
+                      onClick={() => setPromptModalOpen(true)}>
+                      <Maximize2 size={13} />
+                    </Button>
+                  </Tooltip>
+                )}
+              </div>
+              <Textarea.Input
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                onBlur={() => prompt.trim() && prompt !== task.prompt && saveField({ prompt: prompt.trim() })}
+                disabled={isCompleted}
+                rows={4}
+                className="min-h-22 resize-y px-3 py-2"
+              />
+            </SettingRow>
+            <TaskScheduleControls
+              value={schedule}
               disabled={isCompleted}
-              rows={4}
-              className="min-h-22 resize-y px-3 py-2"
+              committedTrigger={task.trigger}
+              committedTimeoutMinutes={task.timeoutMinutes}
+              onChange={setSchedule}
+              onCommit={saveField}
             />
-          </SettingRow>
-          <TaskScheduleControls
-            value={schedule}
-            disabled={isCompleted}
-            committedTrigger={task.trigger}
-            committedTimeoutMinutes={task.timeoutMinutes}
-            onChange={setSchedule}
-            onCommit={saveField}
-          />
-          <TaskChannelSelector
-            channels={channels}
-            channelIds={channelIds}
-            onChange={(value) => {
-              setChannelIds(value)
-              saveField({ channelIds: value })
-            }}
-            disabled={isCompleted}
-          />
-
-          {/* Workspace is a secondary detail — scheduled tasks default to "No work directory". */}
-          <div className="flex items-center gap-1.5 text-foreground-muted text-xs">
-            <span>{t('agent.session.display.workdir')}</span>
-            <WorkspaceSelector
-              value={workspaceId}
-              onChange={(nextWorkspaceId) => {
-                setWorkspaceId(nextWorkspaceId)
-                saveField({
-                  workspace:
-                    nextWorkspaceId === null
-                      ? { type: AGENT_WORKSPACE_TYPE.SYSTEM }
-                      : { type: AGENT_WORKSPACE_TYPE.USER, workspaceId: nextWorkspaceId }
-                })
+            <TaskChannelSelector
+              channels={channels}
+              channelIds={channelIds}
+              onChange={(value) => {
+                setChannelIds(value)
+                saveField({ channelIds: value })
               }}
               disabled={isCompleted}
-              align="start"
-              trigger={
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 gap-1 px-1.5 text-foreground-muted"
-                  disabled={isCompleted}>
-                  {isSystemWorkspace ? <CircleSlash className="size-3.5" /> : <Folder className="size-3.5" />}
-                  <span className="max-w-40 truncate">{workspaceLabel}</span>
-                  <ChevronDown className="size-3.5" />
-                </Button>
-              }
             />
+
+            {/* Workspace is a secondary detail — scheduled tasks default to "No work directory". */}
+            <div className="flex items-center gap-1.5 text-foreground-muted text-xs">
+              <span>{t('agent.session.display.workdir')}</span>
+              <WorkspaceSelector
+                value={workspaceId}
+                onChange={(nextWorkspaceId) => {
+                  setWorkspaceId(nextWorkspaceId)
+                  saveField({
+                    workspace:
+                      nextWorkspaceId === null
+                        ? { type: AGENT_WORKSPACE_TYPE.SYSTEM }
+                        : { type: AGENT_WORKSPACE_TYPE.USER, workspaceId: nextWorkspaceId }
+                  })
+                }}
+                disabled={isCompleted}
+                align="start"
+                trigger={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 gap-1 px-1.5 text-foreground-muted"
+                    disabled={isCompleted}>
+                    {isSystemWorkspace ? <CircleSlash className="size-3.5" /> : <Folder className="size-3.5" />}
+                    <span className="max-w-40 truncate">{workspaceLabel}</span>
+                    <ChevronDown className="size-3.5" />
+                  </Button>
+                }
+              />
+            </div>
           </div>
-        </div>
+        </SettingCard>
       </SettingGroup>
 
       {/* Logs card */}
       <SettingGroup theme={theme}>
         <SettingTitle>{t('agent.cherryClaw.tasks.logs.label')}</SettingTitle>
-        <SettingDivider />
-        <TaskLogsInline taskId={task.id} agentId={task.agentId} />
+        <SettingCard className="border-none *:px-0">
+          <TaskLogsInline taskId={task.id} agentId={task.agentId} />
+        </SettingCard>
       </SettingGroup>
 
       <Dialog open={promptModalOpen} onOpenChange={handlePromptModalOpenChange}>
@@ -652,7 +667,7 @@ const TaskLogsInline: FC<{ taskId: string; agentId: string }> = ({ taskId, agent
       {
         accessorKey: 'startedAt',
         header: t('agent.cherryClaw.tasks.logs.runAt'),
-        meta: { width: 160 },
+        meta: { width: 160, className: 'font-normal' },
         cell: ({ getValue }) =>
           new Date(getValue() as string).toLocaleString(undefined, {
             month: 'numeric',
@@ -665,7 +680,7 @@ const TaskLogsInline: FC<{ taskId: string; agentId: string }> = ({ taskId, agent
       {
         accessorKey: 'durationMs',
         header: t('agent.cherryClaw.tasks.logs.duration'),
-        meta: { width: 80 },
+        meta: { width: 80, className: 'font-normal' },
         cell: ({ getValue, row }) => {
           const val = getValue() as number
 
@@ -678,7 +693,7 @@ const TaskLogsInline: FC<{ taskId: string; agentId: string }> = ({ taskId, agent
       {
         accessorKey: 'status',
         header: t('agent.cherryClaw.tasks.logs.status'),
-        meta: { width: 80 },
+        meta: { width: 80, className: 'font-normal' },
         cell: ({ getValue }) => {
           const val = getValue() as string
           const logStatusLabels: Record<string, string> = {
@@ -693,7 +708,7 @@ const TaskLogsInline: FC<{ taskId: string; agentId: string }> = ({ taskId, agent
       {
         id: 'result',
         header: t('agent.cherryClaw.tasks.logs.result'),
-        meta: { width: 'calc(100% - 320px)', className: 'min-w-0' },
+        meta: { width: 'calc(100% - 320px)', className: 'min-w-0 font-normal' },
         cell: ({ row }) => {
           const record = row.original
           const val = record.result
@@ -772,6 +787,8 @@ const TaskLogsInline: FC<{ taskId: string; agentId: string }> = ({ taskId, agent
             columns={columns}
             rowKey="id"
             emptyText={t('agent.cherryClaw.tasks.logs.empty')}
+            className="bg-transparent"
+            rowClassName="bg-transparent"
           />
         </div>
       </div>
@@ -875,99 +892,104 @@ const CreateForm: FC<{
     <SettingsContentColumn theme={theme}>
       <SettingGroup theme={theme}>
         <SettingTitle>{t('agent.cherryClaw.tasks.add')}</SettingTitle>
-        <SettingDivider />
-        <div className="space-y-5">
-          {agents.length > 1 && (
-            <>
-              <SettingRow className="gap-2" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-                <SettingRowTitle>{t('agent.cherryClaw.channels.bindAgent')}</SettingRowTitle>
-                <Select value={agentId ?? undefined} onValueChange={setAgentId}>
-                  <SelectTrigger size="sm" className="w-full">
-                    <SelectValue placeholder={t('agent.cherryClaw.channels.selectAgent')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {agents.map((a) => (
-                      <SelectItem key={a.id} value={a.id}>
-                        {a.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </SettingRow>
-            </>
-          )}
+        <SettingCard>
+          <div className="space-y-5">
+            {agents.length > 1 && (
+              <>
+                <SettingRow className="gap-2" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                  <SettingRowTitle>{t('agent.cherryClaw.channels.bindAgent')}</SettingRowTitle>
+                  <Select value={agentId ?? undefined} onValueChange={setAgentId}>
+                    <SelectTrigger size="sm" className="w-full">
+                      <SelectValue placeholder={t('agent.cherryClaw.channels.selectAgent')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {agents.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </SettingRow>
+              </>
+            )}
 
-          <SettingRow className="gap-2" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-            <SettingRowTitle>{t('agent.cherryClaw.tasks.name.label')}</SettingRowTitle>
-            <UIInput
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t('agent.cherryClaw.tasks.name.placeholder')}
-            />
-          </SettingRow>
+            <SettingRow className="gap-2" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+              <SettingRowTitle>{t('agent.cherryClaw.tasks.name.label')}</SettingRowTitle>
+              <UIInput
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t('agent.cherryClaw.tasks.name.placeholder')}
+              />
+            </SettingRow>
 
-          <SettingRow className="gap-2" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-            <div className="flex items-center justify-between">
-              <SettingRowTitle>{t('agent.cherryClaw.tasks.prompt.label')}</SettingRowTitle>
-              <Tooltip title={t('agent.cherryClaw.tasks.prompt.expand')}>
-                <Button variant="ghost" size="icon-sm" className="shadow-none" onClick={() => setPromptModalOpen(true)}>
-                  <Maximize2 size={13} />
-                </Button>
-              </Tooltip>
-            </div>
-            <Textarea.Input
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder={t('agent.cherryClaw.tasks.prompt.placeholder')}
-              rows={4}
-              className="min-h-22 resize-y px-3 py-2"
-            />
-          </SettingRow>
-
-          <Dialog open={promptModalOpen} onOpenChange={setPromptModalOpen}>
-            <DialogContent closeOnOverlayClick={false} className="sm:max-w-160">
-              <DialogHeader>
-                <DialogTitle>{t('agent.cherryClaw.tasks.prompt.label')}</DialogTitle>
-              </DialogHeader>
+            <SettingRow className="gap-2" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+              <div className="flex items-center justify-between">
+                <SettingRowTitle>{t('agent.cherryClaw.tasks.prompt.label')}</SettingRowTitle>
+                <Tooltip title={t('agent.cherryClaw.tasks.prompt.expand')}>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="shadow-none"
+                    onClick={() => setPromptModalOpen(true)}>
+                    <Maximize2 size={13} />
+                  </Button>
+                </Tooltip>
+              </div>
               <Textarea.Input
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder={t('agent.cherryClaw.tasks.prompt.placeholder')}
-                rows={14}
-                className="min-h-70 resize-y px-3 py-2"
+                rows={4}
+                className="min-h-22 resize-y px-3 py-2"
               />
-            </DialogContent>
-          </Dialog>
+            </SettingRow>
 
-          <TaskScheduleControls value={schedule} onChange={setSchedule} />
-          <TaskChannelSelector channels={channels} channelIds={channelIds} onChange={setChannelIds} />
+            <Dialog open={promptModalOpen} onOpenChange={setPromptModalOpen}>
+              <DialogContent closeOnOverlayClick={false} className="sm:max-w-160">
+                <DialogHeader>
+                  <DialogTitle>{t('agent.cherryClaw.tasks.prompt.label')}</DialogTitle>
+                </DialogHeader>
+                <Textarea.Input
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  placeholder={t('agent.cherryClaw.tasks.prompt.placeholder')}
+                  rows={14}
+                  className="min-h-70 resize-y px-3 py-2"
+                />
+              </DialogContent>
+            </Dialog>
 
-          {/* Workspace is a secondary detail — scheduled tasks default to "No work directory". */}
-          <div className="flex items-center gap-1.5 text-foreground-muted text-xs">
-            <span>{t('agent.session.display.workdir')}</span>
-            <WorkspaceSelector
-              value={workspaceId}
-              onChange={setWorkspaceId}
-              align="start"
-              trigger={
-                <Button variant="ghost" size="sm" className="h-6 gap-1 px-1.5 text-foreground-muted">
-                  {isSystemWorkspace ? <CircleSlash className="size-3.5" /> : <Folder className="size-3.5" />}
-                  <span className="max-w-40 truncate">{workspaceLabel}</span>
-                  <ChevronDown className="size-3.5" />
-                </Button>
-              }
-            />
+            <TaskScheduleControls value={schedule} onChange={setSchedule} />
+            <TaskChannelSelector channels={channels} channelIds={channelIds} onChange={setChannelIds} />
+
+            {/* Workspace is a secondary detail — scheduled tasks default to "No work directory". */}
+            <div className="flex items-center gap-1.5 text-foreground-muted text-xs">
+              <span>{t('agent.session.display.workdir')}</span>
+              <WorkspaceSelector
+                value={workspaceId}
+                onChange={setWorkspaceId}
+                align="start"
+                trigger={
+                  <Button variant="ghost" size="sm" className="h-6 gap-1 px-1.5 text-foreground-muted">
+                    {isSystemWorkspace ? <CircleSlash className="size-3.5" /> : <Folder className="size-3.5" />}
+                    <span className="max-w-40 truncate">{workspaceLabel}</span>
+                    <ChevronDown className="size-3.5" />
+                  </Button>
+                }
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={onCancel}>
+                {t('agent.cherryClaw.tasks.cancel')}
+              </Button>
+              <Button size="sm" disabled={!isValid} loading={saving} onClick={handleCreate}>
+                {t('agent.cherryClaw.tasks.save')}
+              </Button>
+            </div>
           </div>
-
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={onCancel}>
-              {t('agent.cherryClaw.tasks.cancel')}
-            </Button>
-            <Button size="sm" disabled={!isValid} loading={saving} onClick={handleCreate}>
-              {t('agent.cherryClaw.tasks.save')}
-            </Button>
-          </div>
-        </div>
+        </SettingCard>
       </SettingGroup>
     </SettingsContentColumn>
   )
@@ -1129,7 +1151,7 @@ const TasksSettings: FC = () => {
   return (
     <div className="flex min-w-0 flex-1">
       <div
-        className="flex w-full flex-1 flex-row overflow-hidden"
+        className="flex w-full min-w-0 flex-1 flex-row overflow-hidden"
         style={{ height: 'calc(100vh - var(--navbar-height) - 6px)' }}>
         {/* Left panel: task list */}
         <Scrollbar
@@ -1194,10 +1216,12 @@ const TasksSettings: FC = () => {
               onToggleStatus={handleToggleStatus}
             />
           ) : (
-            <div className="flex flex-1 items-center justify-center text-foreground-muted text-sm">
-              {tasks.length > 0
-                ? t('settings.scheduledTasks.selectTask', 'Select a task to view details')
-                : t('settings.scheduledTasks.noTasks')}
+            <div className="flex flex-1 items-center justify-center px-6 text-center text-foreground-muted text-sm">
+              <span className="max-w-xs leading-relaxed">
+                {tasks.length > 0
+                  ? t('settings.scheduledTasks.selectTask', 'Select a task to view details')
+                  : t('settings.scheduledTasks.noTasks')}
+              </span>
             </div>
           )}
         </div>

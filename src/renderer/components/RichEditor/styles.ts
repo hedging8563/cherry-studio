@@ -254,7 +254,7 @@ const STYLE_CONTENT = `
   padding: 0.25rem 0.5rem;
   color: var(--color-foreground-secondary);
   text-decoration: none;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 0.9rem;
   line-height: 1.4;
   transition: all 0.2s ease;
