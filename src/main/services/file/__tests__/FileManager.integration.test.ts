@@ -523,6 +523,32 @@ describe('FileManager (integration)', () => {
     spy.mockRestore()
   })
 
+  it('INT-14c: runSweep reclaims auto entries and reports entryCleanup; confirmed drains past the threshold', async () => {
+    const HOUR = 60 * 60 * 1000
+    const now = Date.now()
+    const nthCleanupId = (i: number): FileEntryId =>
+      `019606a0-0000-7000-8000-${String(900 + i).padStart(12, '0')}` as FileEntryId
+    const rows = Array.from({ length: 25 }, (_, i) => ({
+      id: nthCleanupId(i),
+      origin: 'internal' as const,
+      name: 'e',
+      ext: 'txt',
+      size: 1,
+      externalPath: null,
+      cleanupPolicy: 'delete_when_unreferenced' as const,
+      deletedAt: null,
+      createdAt: now - 2 * HOUR,
+      updatedAt: now - 2 * HOUR
+    }))
+    await dbh.db.insert(fileEntryTable).values(rows)
+
+    const aborted = await fm.runSweep()
+    expect(aborted.entryCleanup.outcome).toBe('aborted')
+
+    const drained = await fm.runSweep({ confirmed: true })
+    expect(drained.entryCleanup).toMatchObject({ outcome: 'completed', deleted: 25 })
+  })
+
   it('INT-15a: batchCreateInternalEntries reports succeeded with sourceRef + per-item failed', async () => {
     // Two valid items + one that fails (invalid base64 data URI). Verify
     // succeeded carries `{ id, sourceRef }` correlation back to input indices

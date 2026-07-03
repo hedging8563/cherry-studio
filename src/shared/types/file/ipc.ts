@@ -650,18 +650,23 @@ export interface FileIpcApi {
   // is the only consumer.
 
   /**
-   * Run both the FS-level orphan sweep (architecture §10) and the DB-level
-   * temp-session ref prune / entry report (§7 Layer 3) concurrently. Returns
-   * once both settle, with the umbrella discriminated outcome surfaced through
-   * the report's `outcome` field (`'completed'` / `'partial'` / `'failed'`).
+   * Run the scan-based entry cleanup pass, then both the FS-level orphan
+   * sweep (architecture §10) and the DB-level temp-session ref prune / entry
+   * report (§7 Layer 3) concurrently. Returns once all three settle, with the
+   * umbrella discriminated outcome surfaced through the report's `outcome`
+   * field (`'completed'` / `'partial'` / `'failed'`); the cleanup pass's own
+   * outcome rides in `entryCleanup` without affecting it.
    *
    * DB failures dominate as `failed`; FS-side partial/aborted/failed outcomes
    * degrade the umbrella report to `partial` via `fsSweepIssue`.
    *
+   * `params.confirmed` drains a cleanup backlog that exceeded its safety
+   * threshold (surfaced as `entryCleanup.outcome === 'aborted'` otherwise).
+   *
    * @phase 2 — wired in Batch 0 (`IpcChannel.File_RunSweep` →
    * `FileManager.registerIpcHandlers`)
    */
-  runSweep(): Promise<OrphanReport>
+  runSweep(params?: { confirmed?: boolean }): Promise<OrphanReport>
 }
 
 // ─── Electron Types ───

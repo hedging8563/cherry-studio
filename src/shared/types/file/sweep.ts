@@ -15,6 +15,7 @@ export interface OrphanReportCounts {
   readonly orphanRefsTotal: number
   readonly orphanEntriesByOrigin: Partial<Record<FileEntryOrigin, number>>
   readonly orphanEntriesTotal: number
+  readonly entryCleanup: EntryCleanupSummary
 }
 
 /**

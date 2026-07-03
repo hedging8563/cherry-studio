@@ -179,7 +179,7 @@ import {
 } from './internal/entry/lifecycle'
 import { rename as internalRename } from './internal/entry/rename'
 import type { EntryCleanupOptions, EntryCleanupReport } from './internal/entryCleanup'
-import { runEntryCleanup as internalRunEntryCleanup } from './internal/entryCleanup'
+import { runEntryCleanup as internalRunEntryCleanup, summariseEntryCleanup } from './internal/entryCleanup'
 import { observeExternalAccess } from './internal/observe'
 import {
   type DbSweepReport,
@@ -260,6 +260,8 @@ export const EnsureExternalEntryIpcSchema = z.strictObject({
 export const GetPhysicalPathIpcSchema = z.strictObject({ id: FileEntryIdSchema })
 
 export const PermanentDeleteIpcSchema = FileHandleSchema
+
+export const RunSweepIpcSchema = z.strictObject({ confirmed: z.boolean().optional() })
 
 // ─── Version types ───
 
@@ -607,16 +609,21 @@ export interface IFileManager {
   // ─── Orphan sweep (cleanup UI) ───
 
   /**
-   * Run both the FS-level orphan sweep (architecture §10) and the DB-level
-   * temp-session ref prune / entry report (§7 Layer 3) concurrently, returning a single
-   * `OrphanReport` once both settle. The `outcome` discriminator on the
-   * report distinguishes `'completed'` / `'partial'` / `'failed'` so the
-   * renderer cannot read a failed run as a healthy zero.
+   * Run the scan-based entry cleanup pass, then the FS-level orphan sweep
+   * (architecture §10) and the DB-level temp-session ref prune / entry
+   * report (§7 Layer 3) concurrently, returning a single `OrphanReport` once
+   * all three settle. The `outcome` discriminator on the report distinguishes
+   * `'completed'` / `'partial'` / `'failed'` so the renderer cannot read a
+   * failed run as a healthy zero; the cleanup pass's own outcome rides in
+   * `entryCleanup` without affecting the umbrella `outcome`.
+   *
+   * `params.confirmed` forwards to the cleanup pass (`runEntryCleanup`) to
+   * drain a backlog that exceeded its safety threshold.
    *
    * User-triggered via IPC (`File_RunSweep`); no startup auto-run. See
    * architecture §10 for the sweep mechanics.
    */
-  runSweep(): Promise<OrphanReport>
+  runSweep(params?: { confirmed?: boolean }): Promise<OrphanReport>
 
   // ─── 3rd-party Library Escape Hatch ───
 
@@ -766,15 +773,24 @@ export class FileManager extends BaseService implements IFileManager {
         (path) => fsRemove(path)
       )
     })
-    this.ipcHandle(IpcChannel.File_RunSweep, async () => this.runSweep())
+    this.ipcHandle(IpcChannel.File_RunSweep, async (_e, params: unknown) =>
+      this.runSweep(RunSweepIpcSchema.parse(params ?? {}))
+    )
   }
 
   /**
-   * Run the FS-level orphan sweep (file-manager-architecture §10) and
-   * the DB-level temp-session ref prune / entry report (file-manager-architecture §7
-   * Layer 3) concurrently, returning a single `OrphanReport` once both
-   * settle. User-triggered via the `File_RunSweep` IPC channel; there is
-   * no startup auto-run.
+   * Run the scan-based entry cleanup pass (`runEntryCleanup`) first, then
+   * the FS-level orphan sweep (file-manager-architecture §10) and the
+   * DB-level temp-session ref prune / entry report (file-manager-architecture
+   * §7 Layer 3) concurrently, returning a single `OrphanReport` once all
+   * three settle. Running the cleanup pass first means the DB sweep's
+   * zero-ref report doesn't re-report entries the pass just reclaimed.
+   * User-triggered via the `File_RunSweep` IPC channel; there is no startup
+   * auto-run.
+   *
+   * `params.confirmed` forwards to the cleanup pass to drain a backlog that
+   * exceeded its safety threshold; the cleanup pass's own outcome rides in
+   * `counts.entryCleanup` and never changes the umbrella `outcome` below.
    *
    * Each branch absorbs its own errors via inner try/catch and surfaces
    * them through the umbrella `OrphanReport`:
@@ -793,7 +809,8 @@ export class FileManager extends BaseService implements IFileManager {
    *   exists to prevent.
    * - Both clean → `outcome: 'completed'`.
    */
-  async runSweep(): Promise<OrphanReport> {
+  async runSweep(params: { confirmed?: boolean } = {}): Promise<OrphanReport> {
+    const cleanupReport = await this.runEntryCleanup({ confirmed: params.confirmed ?? false })
     const startedAt = Date.now()
     const fsSweepPromise = runFileSweep({ fileEntryService: this.deps.fileEntryService }).catch(
       (err): FileSweepReport => {
@@ -845,7 +862,8 @@ export class FileManager extends BaseService implements IFileManager {
       orphanRefsByType: dbReport.orphanRefsByType,
       orphanRefsTotal: dbReport.orphanRefsTotal,
       orphanEntriesByOrigin: dbReport.orphanEntriesByOrigin,
-      orphanEntriesTotal: dbReport.orphanEntriesTotal
+      orphanEntriesTotal: dbReport.orphanEntriesTotal,
+      entryCleanup: summariseEntryCleanup(cleanupReport)
     }
     const fsSweepIssue = summariseFsSweepIssue(fsReport)
     switch (dbReport.outcome) {
