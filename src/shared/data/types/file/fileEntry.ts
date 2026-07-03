@@ -125,6 +125,16 @@ export type FileEntryId = z.infer<typeof FileEntryIdSchema>
 export const FileEntryOriginSchema = z.enum(['internal', 'external'])
 export type FileEntryOrigin = z.infer<typeof FileEntryOriginSchema>
 
+// ─── Cleanup Policy Enum ───
+
+/**
+ * Cleanup intent stored as data — docs/references/file/file-entry-cleanup.md.
+ * 'manual' entries are preserved at zero refs; 'delete_when_unreferenced'
+ * entries may be reclaimed by FileManager's cleanup pass.
+ */
+export const CleanupPolicySchema = z.enum(['manual', 'delete_when_unreferenced'])
+export type CleanupPolicy = z.infer<typeof CleanupPolicySchema>
+
 // ─── Absolute Path ───
 
 /**
@@ -246,6 +256,8 @@ const CommonEntryFields = {
    * every assignment site. `FileEntrySchema.parse` is the authoritative check.
    */
   ext: SafeExtSchema.nullable(),
+  /** Cleanup intent — see CleanupPolicySchema. */
+  cleanupPolicy: CleanupPolicySchema,
   /** Creation timestamp (ms epoch) */
   createdAt: TimestampSchema,
   /** Last update timestamp (ms epoch) */

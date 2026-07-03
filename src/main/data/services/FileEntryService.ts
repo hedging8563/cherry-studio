@@ -264,6 +264,7 @@ function rowToFileEntry(row: FileEntryRow): FileEntry {
       origin: 'internal',
       name: row.name,
       ext: row.ext,
+      cleanupPolicy: row.cleanupPolicy,
       size: row.size,
       // deletedAt is `optional` on the BO — present iff the DB column is
       // non-null. Bypass `nullsToUndefined` so we don't pull in a helper
@@ -279,6 +280,7 @@ function rowToFileEntry(row: FileEntryRow): FileEntry {
     origin: 'external',
     name: row.name,
     ext: row.ext,
+    cleanupPolicy: row.cleanupPolicy,
     externalPath: row.externalPath,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt

@@ -1619,4 +1619,28 @@ describe('FileEntryService', () => {
       expect(goodPeers.map((e) => e.id)).toEqual([goodExternalId])
     })
   })
+
+  describe('cleanupPolicy', () => {
+    it('defaults to manual on the BO when the insert omits it', () => {
+      const id = '019606a0-0000-7000-8000-00000000cc01' as FileEntryId
+      const entry = fileEntryService.create({ id, origin: 'internal', name: 'a', ext: 'txt', size: 1 })
+      expect(entry.cleanupPolicy).toBe('manual')
+    })
+
+    it('rejects invalid cleanup_policy values at the DB layer', async () => {
+      await expect(
+        dbh.db.insert(fileEntryTable).values({
+          id: '019606a0-0000-7000-8000-00000000cc02',
+          origin: 'internal',
+          name: 'b',
+          ext: 'txt',
+          size: 1,
+          externalPath: null,
+          cleanupPolicy: 'bogus',
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        })
+      ).rejects.toThrow(/CHECK|constraint/i)
+    })
+  })
 })

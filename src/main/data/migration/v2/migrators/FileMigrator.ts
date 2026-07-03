@@ -104,6 +104,7 @@ interface PreparedFileEntry {
   origin: 'internal'
   name: string
   ext: string | null
+  cleanupPolicy: 'manual'
   size: number
   externalPath: null
   deletedAt: null
@@ -196,6 +197,7 @@ function toFileEntry(
     origin: 'internal',
     name: deriveSafeName(row.origin_name || row.name, row.id, onWarning),
     ext,
+    cleanupPolicy: 'manual',
     size,
     externalPath: null,
     deletedAt: null,
@@ -213,6 +215,7 @@ function toFileEntry(
     origin: 'internal',
     name: entry.name,
     ext: entry.ext,
+    cleanupPolicy: 'manual',
     size: entry.size,
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt
