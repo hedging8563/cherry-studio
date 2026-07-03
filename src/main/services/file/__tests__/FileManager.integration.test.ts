@@ -526,8 +526,7 @@ describe('FileManager (integration)', () => {
   it('INT-14c: runSweep reclaims auto entries and reports entryCleanup; confirmed drains past the threshold', async () => {
     const HOUR = 60 * 60 * 1000
     const now = Date.now()
-    const nthCleanupId = (i: number): FileEntryId =>
-      `019606a0-0000-7000-8000-${String(900 + i).padStart(12, '0')}` as FileEntryId
+    const nthCleanupId = (i: number): FileEntryId => `019606a0-0000-7000-8000-${String(900 + i).padStart(12, '0')}`
     const rows = Array.from({ length: 25 }, (_, i) => ({
       id: nthCleanupId(i),
       origin: 'internal' as const,
