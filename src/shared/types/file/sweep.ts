@@ -70,3 +70,16 @@ export type OrphanReport =
       readonly errorMessage: string
       readonly lastRunAt: number
     })
+
+/**
+ * Narrow wire summary of an `EntryCleanupReport` (`internal/entryCleanup.ts`)
+ * for consumers that only need the headline numbers, not the full internal
+ * breakdown (skipped-temp-refs / skipped-refs-reappeared / unlink-failure
+ * counts, timing).
+ */
+export interface EntryCleanupSummary {
+  readonly outcome: 'completed' | 'aborted' | 'failed'
+  readonly candidates: number
+  readonly deleted: number
+  readonly abortReason?: 'count-fraction'
+}
