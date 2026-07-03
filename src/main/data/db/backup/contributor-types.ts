@@ -150,7 +150,7 @@ export interface UniqueMergeRule {
 export interface FieldMergePolicy {
   readonly table: DbTableName
   readonly column: DbColumnName
-  readonly strategy: 'remote-fills-local-null' | 'deep-merge' | 'local-priority'
+  readonly strategy: 'remote-fills-local-null' | 'remote-fills-local-empty' | 'deep-merge' | 'local-priority'
 }
 
 // ─── Contributor schema + policy + operations ──────────────────────────────────
