@@ -110,10 +110,6 @@ async function expandDirectoryNode(
     }
   }
 
-  if (node.type !== 'folder') {
-    return null
-  }
-
   const children: ExpandedDirectoryNode[] = []
 
   for (const child of node.children ?? []) {
