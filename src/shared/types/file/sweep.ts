@@ -77,10 +77,23 @@ export type OrphanReport =
  * for consumers that only need the headline numbers, not the full internal
  * breakdown (skipped-temp-refs / skipped-refs-reappeared / unlink-failure
  * counts, timing).
+ *
+ * **Consumers MUST check `outcome` independently of the umbrella `OrphanReport.outcome`.**
+ * `runSweep` folds this in as `counts.entryCleanup` but never lets an
+ * `aborted` / `failed` cleanup change the umbrella outcome — so a UI that
+ * only inspects the top-level `outcome === 'completed'` would report "all
+ * cleaned up" while the cleanup pass actually aborted on its safety threshold
+ * or crashed. Read `entryCleanup.outcome` to surface that.
+ *
+ * Discriminated on `outcome` so `abortReason` cannot be attached to a
+ * non-`aborted` summary (mirrors `OrphanReport`).
  */
-export interface EntryCleanupSummary {
-  readonly outcome: 'completed' | 'aborted' | 'failed'
-  readonly candidates: number
-  readonly deleted: number
-  readonly abortReason?: 'count-fraction'
-}
+export type EntryCleanupSummary =
+  | { readonly outcome: 'completed'; readonly candidates: number; readonly deleted: number }
+  | {
+      readonly outcome: 'aborted'
+      readonly candidates: number
+      readonly deleted: number
+      readonly abortReason: 'count-fraction'
+    }
+  | { readonly outcome: 'failed'; readonly candidates: number; readonly deleted: number }

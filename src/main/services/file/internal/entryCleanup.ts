@@ -34,9 +34,15 @@ export interface EntryCleanupReport {
   readonly outcome: 'completed' | 'aborted' | 'failed'
   readonly confirmed: boolean
   readonly candidates: number
+  /** Total `file_entry` rows — the abort fraction's denominator; kept in every report so the ratio is reconstructable. */
+  readonly totalEntries: number
   readonly deleted: number
   readonly skippedTempRefs: number
   readonly skippedRefsReappeared: number
+  /** Candidates that vanished or were pinned (`manual`) between query and tx re-read — benign no-ops. */
+  readonly gonePinned: number
+  /** Candidates whose per-item processing threw and was caught (retried next pass) — distinguishes a genuine no-op from a batch that all errored. */
+  readonly failed: number
   readonly unlinkFailures: number
   readonly durationMs: number
   readonly abortReason?: 'count-fraction'
@@ -51,16 +57,21 @@ export async function runEntryCleanup(
 ): Promise<EntryCleanupReport> {
   const startedAt = Date.now()
   const confirmed = opts.confirmed ?? false
+  let totalEntries = 0
   try {
     const candidates = deps.fileEntryService.countCleanupCandidates(ENTRY_CLEANUP_GRACE_MS)
+    totalEntries = deps.fileEntryService.countAll()
     if (candidates === 0) {
       return finish({
         outcome: 'completed',
         confirmed,
         candidates,
+        totalEntries,
         deleted: 0,
         skippedTempRefs: 0,
         skippedRefsReappeared: 0,
+        gonePinned: 0,
+        failed: 0,
         unlinkFailures: 0,
         durationMs: Date.now() - startedAt
       })
@@ -68,16 +79,18 @@ export async function runEntryCleanup(
 
     // Safety threshold (spec §5.3): guards classification bugs; a legitimate
     // mass-delete unblocks via the user-confirmed drain.
-    const totalEntries = deps.fileEntryService.countAll()
     if (!confirmed && candidates >= ABORT_MIN_CANDIDATES && candidates > totalEntries * ABORT_FRACTION) {
       return finish({
         outcome: 'aborted',
         abortReason: 'count-fraction',
         confirmed,
         candidates,
+        totalEntries,
         deleted: 0,
         skippedTempRefs: 0,
         skippedRefsReappeared: 0,
+        gonePinned: 0,
+        failed: 0,
         unlinkFailures: 0,
         durationMs: Date.now() - startedAt
       })
@@ -90,17 +103,18 @@ export async function runEntryCleanup(
     let deleted = 0
     let skippedTempRefs = 0
     let skippedRefsReappeared = 0
+    let gonePinned = 0
+    let failed = 0
     let unlinkFailures = 0
 
     for (const candidate of batch) {
       try {
         // Temp-session refs live in main-process cache memory and are not
         // transactional — checked outside the tx; a ref appearing mid-tx is
-        // tolerated (spec §6: pruned later, FK fails on persist).
-        const hasTempRef = deps.fileRefService
-          .findByEntryId(candidate.id)
-          .some((ref) => ref.sourceType === 'temp_session')
-        if (hasTempRef) {
+        // tolerated (spec §6: pruned later, FK fails on persist). Uses the
+        // dedicated cache-only predicate instead of `findByEntryId` so this
+        // per-candidate check never fans out to the persistent ref tables.
+        if (deps.fileRefService.hasTempSessionRef(candidate.id)) {
           skippedTempRefs++
           continue
         }
@@ -128,12 +142,14 @@ export async function runEntryCleanup(
             skippedRefsReappeared++
             break
           case 'gone-or-pinned':
+            gonePinned++
             break
           default:
             assertNever(outcome)
         }
       } catch (err) {
         // Stateless retry (spec §5.6): the next pass re-derives this candidate.
+        failed++
         logger.warn('file-entry-cleanup: candidate failed, retried next pass', { id: candidate.id, err })
       }
     }
@@ -142,28 +158,37 @@ export async function runEntryCleanup(
       outcome: 'completed',
       confirmed,
       candidates,
+      totalEntries,
       deleted,
       skippedTempRefs,
       skippedRefsReappeared,
+      gonePinned,
+      failed,
       unlinkFailures,
       durationMs: Date.now() - startedAt
     })
   } catch (err) {
-    return finish({
-      outcome: 'failed',
-      errorMessage: (err as Error).message,
-      confirmed,
-      candidates: 0,
-      deleted: 0,
-      skippedTempRefs: 0,
-      skippedRefsReappeared: 0,
-      unlinkFailures: 0,
-      durationMs: Date.now() - startedAt
-    })
+    return finish(
+      {
+        outcome: 'failed',
+        errorMessage: err instanceof Error ? err.message : String(err),
+        confirmed,
+        candidates: 0,
+        totalEntries,
+        deleted: 0,
+        skippedTempRefs: 0,
+        skippedRefsReappeared: 0,
+        gonePinned: 0,
+        failed: 0,
+        unlinkFailures: 0,
+        durationMs: Date.now() - startedAt
+      },
+      err
+    )
   }
 }
 
-function finish(report: EntryCleanupReport): EntryCleanupReport {
+function finish(report: EntryCleanupReport, rawError?: unknown): EntryCleanupReport {
   const payload = { event: 'file-entry-cleanup', ...report }
   switch (report.outcome) {
     case 'completed':
@@ -172,9 +197,14 @@ function finish(report: EntryCleanupReport): EntryCleanupReport {
     case 'aborted':
       logger.warn('file-entry-cleanup', payload)
       break
-    case 'failed':
-      logger.error('file-entry-cleanup', payload)
+    case 'failed': {
+      // Pass the raw error first (the logger extracts its stack) alongside the
+      // structured payload — the whole-batch-crash path is the one that most
+      // needs the stack, which `errorMessage` alone drops.
+      const errArg = rawError instanceof Error ? rawError : new Error(report.errorMessage ?? String(rawError))
+      logger.error('file-entry-cleanup', errArg, payload)
       break
+    }
     default:
       assertNever(report.outcome)
   }
@@ -182,10 +212,15 @@ function finish(report: EntryCleanupReport): EntryCleanupReport {
 }
 
 export function summariseEntryCleanup(report: EntryCleanupReport): EntryCleanupSummary {
-  return {
-    outcome: report.outcome,
-    candidates: report.candidates,
-    deleted: report.deleted,
-    ...(report.abortReason !== undefined ? { abortReason: report.abortReason } : {})
+  const base = { candidates: report.candidates, deleted: report.deleted }
+  switch (report.outcome) {
+    case 'aborted':
+      return { outcome: 'aborted', ...base, abortReason: report.abortReason ?? 'count-fraction' }
+    case 'failed':
+      return { outcome: 'failed', ...base }
+    case 'completed':
+      return { outcome: 'completed', ...base }
+    default:
+      return assertNever(report.outcome)
   }
 }

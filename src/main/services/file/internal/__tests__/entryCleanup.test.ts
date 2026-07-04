@@ -300,6 +300,9 @@ describe('entryCleanup', () => {
       for (let i = 0; i < 25; i++) await seedInternal(nthId(300 + i), 'delete_when_unreferenced')
       const report = await runEntryCleanup(makeDeps())
       const summary = summariseEntryCleanup(report)
+      expect(summary.outcome).toBe('aborted')
+      // Narrow the discriminated union before reading the aborted-only field.
+      if (summary.outcome !== 'aborted') throw new Error('expected aborted summary')
       expect(summary.abortReason).toBe('count-fraction')
     })
   })

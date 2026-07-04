@@ -49,6 +49,11 @@ import { asNumericKey, asStringKey, decodeListCursor, encodeCursor, keysetOrderi
 
 const logger = loggerService.withContext('FileEntryService')
 
+// `cleanupPolicy` MUST stay required on both branches — no `.default()` / `.optional()`.
+// This is the single compile-time forcing point that makes every creation surface
+// choose a policy explicitly (file-entry-cleanup.md §4.1). Adding a default here would
+// silently let a forgotten assignment fall through to the DB backstop, defeating the
+// "leak recoverably rather than delete unrecoverably" invariant.
 const CreateFileEntryRowSchema = z.discriminatedUnion('origin', [
   z.strictObject({
     id: InternalEntrySchema.shape.id,

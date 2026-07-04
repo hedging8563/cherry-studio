@@ -67,6 +67,13 @@ export interface FileRefService {
   /** Ref-count aggregation for a batch of entry ids. */
   countByEntryIds(ids: readonly FileEntryId[]): Map<FileEntryId, number>
 
+  /**
+   * Whether any temp-session (CacheService-backed) ref points at this entry.
+   * Cache-only — never touches the persistent ref tables, unlike `findByEntryId`.
+   * Used by the cleanup pass's per-candidate temp-ref guard (spec §6).
+   */
+  hasTempSessionRef(fileEntryId: FileEntryId): boolean
+
   /** Drop temp-session cache refs whose file_entry no longer exists. */
   pruneMissingTempSessionRefs(existingEntryIds: ReadonlySet<FileEntryId>): number
 
@@ -285,6 +292,13 @@ class FileRefServiceImpl implements FileRefService {
     }
 
     return counts
+  }
+
+  hasTempSessionRef(fileEntryId: FileEntryId): boolean {
+    for (const refs of Object.values(this.readTempSessionCache())) {
+      if (refs.some((ref) => ref.fileEntryId === fileEntryId)) return true
+    }
+    return false
   }
 
   pruneMissingTempSessionRefs(existingEntryIds: ReadonlySet<FileEntryId>): number {
