@@ -1,8 +1,8 @@
 # File Entry Cleanup (GC) Design
 
-> Status: approved design / spec, pending implementation.
+> Status: implemented (PR #16727) — the `cleanup_policy` column, the scan-based cleanup pass, and the contract updates below shipped together; this document is the design record and behavioral reference for that implementation.
 >
-> Current FileManager behavior still follows [`file-manager-architecture.md`](./file-manager-architecture.md) §7: zero-reference `file_entry` rows are reported, not automatically deleted. The implementation PR series for this design must update that binding contract (§7.1 / §7.2) in the same series.
+> The binding contract in [`file-manager-architecture.md`](./file-manager-architecture.md) §7 was updated in the same series: zero-reference `manual` entries remain report-only, while `delete_when_unreferenced` entries are reclaimed by the cleanup pass described here.
 >
 > This document replaces the earlier outbox-queue proposal (`file-entry-cleanup-queue.md`); the queue design is preserved in [§10 Rejected Designs](#10-rejected-designs) with the rationale for its rejection.
 
@@ -82,7 +82,7 @@ FilesPage keeps listing **all** entries (preserving the v1 habit of browsing his
 
 ## 5. Cleanup Pass (Reaper)
 
-FileManager owns the pass because it already owns entry deletion semantics, physical cleanup, and file-module caches. It lives as a new private module alongside `orphanSweep.ts` (e.g. `src/main/services/file/internal/entryCleanup.ts`), exposed as `FileManager.runEntryCleanup()`.
+FileManager owns the pass because it already owns entry deletion semantics, physical cleanup, and file-module caches. It lives as a private module alongside `orphanSweep.ts` (`src/main/services/file/internal/entryCleanup.ts`), exposed as `FileManager.runEntryCleanup()`.
 
 There is **no queue and no trigger**: the candidate set is fully derivable from current DB state, so discovery is a query, and idempotence/crash-safety follow by construction.
 
@@ -198,7 +198,7 @@ Rationale: a blanket `delete_when_unreferenced` would let the **first cleanup pa
 
 ### 7.3 Breaking-changes log
 
-Add an entry under `v2-refactor-temp/docs/breaking-changes/`: deleting a chat/topic/painting now reclaims its exclusively-owned files; the Files page no longer accumulates every historical upload forever; "pin to library" (manual policy) is the retention mechanism.
+Entry: `v2-refactor-temp/docs/breaking-changes/2026-07-04-automatic-file-cleanup-on-deletion.md` — deleting a chat/topic/painting now reclaims its exclusively-owned files; the Files page no longer accumulates every historical upload forever; "pin to library" (manual policy) is the retention mechanism.
 
 ## 8. Contract & Documentation Updates
 
