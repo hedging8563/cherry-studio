@@ -133,6 +133,13 @@
       "when": 1783088873334,
       "tag": "0018_misty_infant_terrible",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1783151949181,
+      "tag": "0019_clumsy_havok",
+      "breakpoints": true
     }
   ],
   "version": "7"

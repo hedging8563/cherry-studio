@@ -743,9 +743,13 @@ describe('AiService.generateImage — custom async transport (job path)', () => 
       snapshot: {},
       finished: Promise.resolve({ status: 'completed', output: { files: outputFiles }, error: null })
     })
+    // Capture the job_file_ref insert chain (getDb().insert(table).values(rows).run()).
+    const refInsertValues = vi.fn().mockReturnValue({ run: vi.fn() })
+    const refInsert = vi.fn().mockReturnValue({ values: refInsertValues })
     mockApplicationGet.mockImplementation((name: string) => {
       if (name === 'FileManager') return { createInternalEntry }
       if (name === 'JobManager') return { enqueue, cancel: vi.fn() }
+      if (name === 'DbService') return { getDb: () => ({ insert: refInsert }) }
       return undefined
     })
 
@@ -768,6 +772,11 @@ describe('AiService.generateImage — custom async transport (job path)', () => 
     expect(createInternalEntry).toHaveBeenCalledWith(
       expect.objectContaining({ cleanupPolicy: 'delete_when_unreferenced' })
     )
+    // A job_file_ref must hold the input for the job's lifetime so a startup
+    // cleanup pass can't reclaim it before recovery resumes the job.
+    expect(refInsertValues).toHaveBeenCalledWith([
+      expect.objectContaining({ fileEntryId: 'in-1', sourceId: 'job-1', role: 'input' })
+    ])
   })
 
   it('maps a failed job snapshot to a thrown error', async () => {

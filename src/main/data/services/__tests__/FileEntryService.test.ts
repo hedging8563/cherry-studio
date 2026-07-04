@@ -1,10 +1,12 @@
 import { fileEntryTable } from '@data/db/schemas/file'
 import {
   chatMessageFileRefTable,
+  jobFileRefTable,
   paintingFileRefTable,
   persistentFileRefTablesBySourceType,
   persistentRefAbsenceConditions
 } from '@data/db/schemas/fileRelations'
+import { jobTable } from '@data/db/schemas/job'
 import { messageTable } from '@data/db/schemas/message'
 import { paintingTable } from '@data/db/schemas/painting'
 import { topicTable } from '@data/db/schemas/topic'
@@ -1355,7 +1357,7 @@ describe('FileEntryService', () => {
     })
   })
 
-  // Shared by `findUnreferenced` and `findCleanupCandidates` — both need to
+  // Shared by `findManualUnreferenced` and `findCleanupCandidates` — both need to
   // seed a persistent (painting / chat) ref pointing at a given entry.
   async function seedRef(fileEntryId: FileEntryId): Promise<void> {
     const now = Date.now()
@@ -1420,7 +1422,33 @@ describe('FileEntryService', () => {
     })
   }
 
-  describe('findUnreferenced', () => {
+  // Seeds a `job` row plus a `job_file_ref` pointing at `fileEntryId` (mirrors
+  // how AiService protects async image-job inputs). Returns the job id so a test
+  // can delete the job row and assert the FK cascade releases the ref.
+  async function seedJobRef(fileEntryId: FileEntryId): Promise<string> {
+    const now = Date.now()
+    const suffix = fileEntryId.slice(-12)
+    const jobId = `44444444-4444-4444-8444-${suffix}`
+    await dbh.db.insert(jobTable).values({
+      id: jobId,
+      type: 'image-generation.generate',
+      status: 'running',
+      queue: 'image-generation.test',
+      scheduledAt: now,
+      input: {}
+    })
+    await dbh.db.insert(jobFileRefTable).values({
+      id: `55555555-5555-4555-8555-${suffix}`,
+      fileEntryId,
+      sourceId: jobId,
+      role: 'input',
+      createdAt: now,
+      updatedAt: now
+    })
+    return jobId
+  }
+
+  describe('findManualUnreferenced', () => {
     it('returns only entries with zero persistent refs', async () => {
       const referenced = '019606a0-0000-7000-8000-000000000d01' as FileEntryId
       const orphan = '019606a0-0000-7000-8000-000000000d02' as FileEntryId
@@ -1442,7 +1470,7 @@ describe('FileEntryService', () => {
       })
       await seedRef(referenced)
 
-      const result = fileEntryService.findUnreferenced()
+      const result = fileEntryService.findManualUnreferenced()
       const ids = result.map((e) => e.id)
       expect(ids).toEqual([orphan])
     })
@@ -1468,7 +1496,7 @@ describe('FileEntryService', () => {
       })
       await seedChatRef(referenced)
 
-      const result = fileEntryService.findUnreferenced()
+      const result = fileEntryService.findManualUnreferenced()
       expect(result.map((e) => e.id)).toEqual([orphan])
     })
 
@@ -1494,7 +1522,7 @@ describe('FileEntryService', () => {
       await seedRef(referenced)
       await seedChatRef(referenced)
 
-      const result = fileEntryService.findUnreferenced()
+      const result = fileEntryService.findManualUnreferenced()
       expect(result.map((e) => e.id)).toEqual([orphan])
     })
 
@@ -1516,10 +1544,10 @@ describe('FileEntryService', () => {
         externalPath: '/abs/orphan.txt' as CanonicalExternalPath
       })
 
-      const externalsOnly = fileEntryService.findUnreferenced({ origin: 'external' })
+      const externalsOnly = fileEntryService.findManualUnreferenced({ origin: 'external' })
       expect(externalsOnly.map((e) => e.id)).toEqual([externalOrphan.id])
 
-      const internalsOnly = fileEntryService.findUnreferenced({ origin: 'internal' })
+      const internalsOnly = fileEntryService.findManualUnreferenced({ origin: 'internal' })
       expect(internalsOnly.map((e) => e.id)).toEqual([internalOrphan])
     })
 
@@ -1535,8 +1563,36 @@ describe('FileEntryService', () => {
       })
       fileEntryService.update(id, { deletedAt: Date.now() })
 
-      const result = fileEntryService.findUnreferenced()
+      const result = fileEntryService.findManualUnreferenced()
       expect(result.find((e) => e.id === id)).toBeUndefined()
+    })
+
+    it('excludes delete_when_unreferenced entries (owned by the cleanup pass, not the orphan report)', () => {
+      // Regression for the double-report bug: a zero-ref auto entry is a cleanup
+      // candidate, so reporting it here too would misclassify it as a manual
+      // orphan while it is still pending auto-reclamation.
+      const manual = '019606a0-0000-7000-8000-000000000d31' as FileEntryId
+      const auto = '019606a0-0000-7000-8000-000000000d32' as FileEntryId
+      fileEntryService.create({
+        id: manual,
+        origin: 'internal',
+        cleanupPolicy: 'manual',
+        name: 'm',
+        ext: 'txt',
+        size: 1
+      })
+      fileEntryService.create({
+        id: auto,
+        origin: 'internal',
+        cleanupPolicy: 'delete_when_unreferenced',
+        name: 'a',
+        ext: 'txt',
+        size: 1
+      })
+
+      const ids = fileEntryService.findManualUnreferenced().map((e) => e.id)
+      expect(ids).toContain(manual)
+      expect(ids).not.toContain(auto)
     })
   })
 
@@ -1592,6 +1648,23 @@ describe('FileEntryService', () => {
     it('anti-join covers every registered persistent ref table', () => {
       const conditions = persistentRefAbsenceConditions()
       expect(conditions).toHaveLength(Object.keys(persistentFileRefTablesBySourceType).length)
+    })
+
+    it('excludes an auto entry held by a job_file_ref, and reclaims it once the job row is gone', async () => {
+      // Regression: async image-job inputs are `delete_when_unreferenced` and
+      // past grace, but a live job holds them via job_file_ref — they must NOT
+      // be reclaimed until the job row (and its cascading ref) is gone.
+      const jobInput = '019606a0-0000-7000-8000-0000000cc010' as FileEntryId
+      await seedEntry(jobInput, 'delete_when_unreferenced', 2 * HOUR)
+      const jobId = await seedJobRef(jobInput)
+
+      expect(fileEntryService.findCleanupCandidates({ graceMs: HOUR, limit: 100 }).map((e) => e.id)).not.toContain(
+        jobInput
+      )
+
+      // Job row pruned (terminal-row GC) → FK cascade drops the ref → reclaimable.
+      await dbh.db.delete(jobTable).where(eq(jobTable.id, jobId))
+      expect(fileEntryService.findCleanupCandidates({ graceMs: HOUR, limit: 100 }).map((e) => e.id)).toContain(jobInput)
     })
   })
 
@@ -1656,9 +1729,9 @@ describe('FileEntryService', () => {
       expect(page.total).toBe(2)
     })
 
-    it('findUnreferenced skips bad rows', async () => {
+    it('findManualUnreferenced skips bad rows', async () => {
       await seedOneGoodOneBad()
-      const entries = fileEntryService.findUnreferenced()
+      const entries = fileEntryService.findManualUnreferenced()
       expect(entries.map((e) => e.id)).toEqual([goodId])
     })
 

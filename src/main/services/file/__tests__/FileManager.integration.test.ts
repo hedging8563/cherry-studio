@@ -482,10 +482,10 @@ describe('FileManager (integration)', () => {
 
   it('INT-14a: a runDbSweep collapse propagates through to runSweep outcome="failed"', async () => {
     // Drive `runDbSweep` into its inner `'failed'` branch by spying on
-    // `scanOrphanEntries`'s downstream `findUnreferenced` call to throw.
+    // `scanOrphanEntries`'s downstream `findManualUnreferenced` call to throw.
     // Verifies the end-to-end propagation: runDbSweep → `'failed'` report
     // → `runSweep` returns the `'failed'` variant.
-    const spy = vi.spyOn(fm['deps'].fileEntryService, 'findUnreferenced').mockImplementationOnce(() => {
+    const spy = vi.spyOn(fm['deps'].fileEntryService, 'findManualUnreferenced').mockImplementationOnce(() => {
       throw new Error('db conn lost mid-sweep')
     })
 
@@ -501,7 +501,7 @@ describe('FileManager (integration)', () => {
 
   it('INT-14b: an FS sweep collapse degrades runSweep umbrella to "partial" (does not bleed into "failed")', async () => {
     // `listAllIds` is the FS sweep's first dependency call; `runDbSweep` uses
-    // `findUnreferenced`, so spying on `listAllIds` isolates the failure to
+    // `findManualUnreferenced`, so spying on `listAllIds` isolates the failure to
     // the FS side and the DB sweep stays on its happy `'completed'` path.
     // Without the umbrella merge, the cleanup UI would see `outcome:
     // 'completed'` over an EACCES — the regression flagged in

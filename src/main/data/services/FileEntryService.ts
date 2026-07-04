@@ -194,13 +194,18 @@ export interface FileEntryService {
   getStats(): FileEntryStats
 
   /**
-   * Active (non-trashed) entries with zero persistent association rows pointing
-   * at them. Temp-session refs live in CacheService and are filtered by the
+   * Active (non-trashed) **manual-policy** entries with zero persistent
+   * association rows pointing at them — the DB orphan report's data source.
+   * `delete_when_unreferenced` entries are deliberately excluded: they are
+   * owned by the cleanup pass (`findCleanupCandidates`), so reporting them
+   * here too would double-count auto entries still pending reclamation
+   * (young, safety-aborted, or beyond the per-pass batch) as manual orphans.
+   * Temp-session refs live in CacheService and are filtered by the
    * orphan-sweep layer.
    *
    * Un-parseable rows are skipped with a warning (see `rowToFileEntrySafe`).
    */
-  findUnreferenced(query?: { origin?: FileEntryOrigin }): FileEntry[]
+  findManualUnreferenced(query?: { origin?: FileEntryOrigin }): FileEntry[]
 
   /** Auto-policy entries past grace with zero persistent refs (trashed included) — backs the GC pass. */
   findCleanupCandidates(opts: { graceMs: number; limit: number }): FileEntry[]
@@ -541,8 +546,12 @@ class FileEntryServiceImpl implements FileEntryService {
     }
   }
 
-  findUnreferenced(query: { origin?: FileEntryOrigin } = {}): FileEntry[] {
-    const conditions: SQL[] = [isNull(fileEntryTable.deletedAt), ...persistentRefAbsenceConditions()]
+  findManualUnreferenced(query: { origin?: FileEntryOrigin } = {}): FileEntry[] {
+    const conditions: SQL[] = [
+      isNull(fileEntryTable.deletedAt),
+      eq(fileEntryTable.cleanupPolicy, 'manual'),
+      ...persistentRefAbsenceConditions()
+    ]
     if (query.origin) conditions.push(eq(fileEntryTable.origin, query.origin))
     const rows = this.getDb()
       .select({ entry: fileEntryTable })

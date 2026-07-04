@@ -3,6 +3,8 @@ import {
   chatMessageRoles,
   chatMessageSourceType,
   type FileRefSourceType,
+  jobRoles,
+  jobSourceType,
   paintingRoles,
   paintingSourceType
 } from '@shared/data/types/file/ref'
@@ -11,6 +13,7 @@ import { check, index, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite
 
 import { createUpdateTimestamps, uuidPrimaryKey } from './_columnHelpers'
 import { fileEntryTable } from './file'
+import { jobTable } from './job'
 import { messageTable } from './message'
 import { paintingTable } from './painting'
 
@@ -79,10 +82,45 @@ export const paintingFileRefTable = sqliteTable(
   ]
 )
 
+/**
+ * Job file references.
+ *
+ * Links a FileEntry to a `job` row so the generic job system's persisted
+ * inputs are visible to the cleanup anti-join (file-entry-cleanup.md §5.1).
+ * Today only the async image-generation job holds refs here (its input images
+ * / mask). Deleting the job row (terminal-row pruning) cascades the ref, so
+ * the inputs become reclaimable exactly when the job record is gone; deleting
+ * the file entry cascades too.
+ */
+export const jobFileRefTable = sqliteTable(
+  'job_file_ref',
+  {
+    id: uuidPrimaryKey(),
+    fileEntryId: text()
+      .notNull()
+      .references(() => fileEntryTable.id, { onDelete: 'cascade' }),
+    sourceId: text()
+      .notNull()
+      .references(() => jobTable.id, { onDelete: 'cascade' }),
+    role: text().notNull().$type<(typeof jobRoles)[number]>(),
+    ...createUpdateTimestamps
+  },
+  (t) => [
+    index('jfr_entry_id_idx').on(t.fileEntryId),
+    index('jfr_source_id_idx').on(t.sourceId),
+    uniqueIndex('jfr_unique_idx').on(t.fileEntryId, t.sourceId, t.role),
+    check('jfr_role_check', roleCheck(t.role, jobRoles))
+  ]
+)
+
 export const persistentFileRefTablesBySourceType = {
   [chatMessageSourceType]: chatMessageFileRefTable,
-  [paintingSourceType]: paintingFileRefTable
-} as const satisfies Record<PersistentFileRefSourceType, typeof chatMessageFileRefTable | typeof paintingFileRefTable>
+  [paintingSourceType]: paintingFileRefTable,
+  [jobSourceType]: jobFileRefTable
+} as const satisfies Record<
+  PersistentFileRefSourceType,
+  typeof chatMessageFileRefTable | typeof paintingFileRefTable | typeof jobFileRefTable
+>
 
 /**
  * NOT EXISTS conditions for "no persistent ref points at this file_entry",
@@ -99,3 +137,5 @@ export type ChatMessageFileRefRow = typeof chatMessageFileRefTable.$inferSelect
 export type InsertChatMessageFileRefRow = typeof chatMessageFileRefTable.$inferInsert
 export type PaintingFileRefRow = typeof paintingFileRefTable.$inferSelect
 export type InsertPaintingFileRefRow = typeof paintingFileRefTable.$inferInsert
+export type JobFileRefRow = typeof jobFileRefTable.$inferSelect
+export type InsertJobFileRefRow = typeof jobFileRefTable.$inferInsert

@@ -16,6 +16,7 @@ import { application } from '@application'
 import { fileEntryTable } from '@data/db/schemas/file'
 import {
   chatMessageFileRefTable,
+  jobFileRefTable,
   paintingFileRefTable,
   type PersistentFileRefSourceType,
   persistentFileRefTablesBySourceType
@@ -24,7 +25,12 @@ import type { DbOrTx } from '@data/db/types'
 import type { FileEntryId, FileRef, FileRefSourceType } from '@shared/data/types/file'
 import { FileRefSchema } from '@shared/data/types/file'
 import type { tempSessionRoles } from '@shared/data/types/file/ref'
-import { chatMessageSourceType, paintingSourceType, tempSessionSourceType } from '@shared/data/types/file/ref'
+import {
+  chatMessageSourceType,
+  jobSourceType,
+  paintingSourceType,
+  tempSessionSourceType
+} from '@shared/data/types/file/ref'
 import { asc, count, eq, inArray } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -73,6 +79,7 @@ const TEMP_SESSION_REFS_CACHE_KEY = 'file.temp_session.refs'
 
 type ChatMessageFileRefRow = typeof chatMessageFileRefTable.$inferSelect
 type PaintingFileRefRow = typeof paintingFileRefTable.$inferSelect
+type JobFileRefRow = typeof jobFileRefTable.$inferSelect
 type TempSessionFileRef = Extract<FileRef, { sourceType: typeof tempSessionSourceType }>
 type TempSessionRefCache = Record<string, TempSessionFileRef[]>
 
@@ -88,6 +95,10 @@ function chatMessageRowToFileRef(row: ChatMessageFileRefRow): FileRef {
 
 function paintingRowToFileRef(row: PaintingFileRefRow): FileRef {
   return FileRefSchema.parse({ ...row, sourceType: paintingSourceType })
+}
+
+function jobRowToFileRef(row: JobFileRefRow): FileRef {
+  return FileRefSchema.parse({ ...row, sourceType: jobSourceType })
 }
 
 function tempSessionRowToFileRef(row: TempSessionFileRef): FileRef {
@@ -145,6 +156,15 @@ class FileRefServiceImpl implements FileRefService {
           .orderBy(asc(paintingFileRefTable.createdAt), asc(paintingFileRefTable.id))
           .all()
         return rows.map(paintingRowToFileRef)
+      },
+      [jobSourceType]: () => {
+        const rows = this.getDb()
+          .select()
+          .from(jobFileRefTable)
+          .where(eq(jobFileRefTable.fileEntryId, fileEntryId))
+          .orderBy(asc(jobFileRefTable.createdAt), asc(jobFileRefTable.id))
+          .all()
+        return rows.map(jobRowToFileRef)
       }
     } satisfies Record<PersistentFileRefSourceType, () => FileRef[]>
 
@@ -178,6 +198,15 @@ class FileRefServiceImpl implements FileRefService {
           .orderBy(asc(paintingFileRefTable.createdAt), asc(paintingFileRefTable.id))
           .all()
         return rows.map(paintingRowToFileRef)
+      }
+      case jobSourceType: {
+        const rows = this.getDb()
+          .select()
+          .from(jobFileRefTable)
+          .where(eq(jobFileRefTable.sourceId, source.sourceId))
+          .orderBy(asc(jobFileRefTable.createdAt), asc(jobFileRefTable.id))
+          .all()
+        return rows.map(jobRowToFileRef)
       }
     }
   }
@@ -232,6 +261,13 @@ class FileRefServiceImpl implements FileRefService {
             .from(paintingFileRefTable)
             .where(inArray(paintingFileRefTable.fileEntryId, chunk))
             .groupBy(paintingFileRefTable.fileEntryId)
+            .all(),
+        [jobSourceType]: () =>
+          this.getDb()
+            .select({ entryId: jobFileRefTable.fileEntryId, refCount: count() })
+            .from(jobFileRefTable)
+            .where(inArray(jobFileRefTable.fileEntryId, chunk))
+            .groupBy(jobFileRefTable.fileEntryId)
             .all()
       } satisfies Record<PersistentFileRefSourceType, () => Array<{ entryId: FileEntryId; refCount: number }>>
 

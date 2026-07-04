@@ -168,7 +168,7 @@ describe('runDbSweep (umbrella + observability)', () => {
   it('reports failed outcome when an outer-level operation throws', async () => {
     const errorSpy = vi.spyOn(loggerService, 'error')
     const failingEntryService = {
-      findUnreferenced: () => {
+      findManualUnreferenced: () => {
         throw new Error('boom')
       },
       listAllIds: fileEntryService.listAllIds.bind(fileEntryService)

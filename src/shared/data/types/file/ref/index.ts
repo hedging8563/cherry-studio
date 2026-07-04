@@ -36,6 +36,7 @@ import {
   chatMessageRoleSchema,
   chatMessageSourceType
 } from './chatMessage'
+import { jobFileRefSchema, jobRefFields, jobRoles, jobRoleSchema, jobSourceType } from './job'
 import {
   paintingFileRefSchema,
   paintingRefFields,
@@ -61,6 +62,8 @@ import { tempSessionFileRefSchema, tempSessionRefFields, tempSessionRoles, tempS
  * - `chat_message` — refs from migrated chat message attachments (`./chatMessage.ts`).
  * - `painting` — refs from `painting` rows (`./painting.ts`), roles
  *   `output`/`input`.
+ * - `job` — refs from `job` rows (`./job.ts`), roles `input`/`mask`; today only
+ *   the async image-generation job holds its persisted input images / mask.
  *
  * Other business domains (note) deliberately do NOT appear here. They will be
  * added when their owning DB tables migrate to v2 — at which point each
@@ -71,7 +74,8 @@ import { tempSessionFileRefSchema, tempSessionRefFields, tempSessionRoles, tempS
 export const allSourceTypes = [
   tempSessionSourceType,
   chatMessageSourceType,
-  paintingSourceType
+  paintingSourceType,
+  jobSourceType
 ] as const satisfies readonly string[]
 export type FileRefSourceType = (typeof allSourceTypes)[number]
 
@@ -94,7 +98,8 @@ export const FileRefSourceTypeSchema = z.enum(allSourceTypes)
 export const FileRefSchema = z.discriminatedUnion('sourceType', [
   tempSessionFileRefSchema,
   chatMessageFileRefSchema,
-  paintingFileRefSchema
+  paintingFileRefSchema,
+  jobFileRefSchema
 ])
 export type FileRef = z.infer<typeof FileRefSchema>
 
@@ -106,6 +111,11 @@ export {
   chatMessageRoles,
   chatMessageRoleSchema,
   chatMessageSourceType,
+  jobFileRefSchema,
+  jobRefFields,
+  jobRoles,
+  jobRoleSchema,
+  jobSourceType,
   paintingFileRefSchema,
   paintingRefFields,
   paintingRoles,

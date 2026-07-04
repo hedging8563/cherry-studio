@@ -3,6 +3,7 @@ import {
   generateImage as aiCoreGenerateImage,
   rerank as aiCoreRerank
 } from '@cherrystudio/ai-core'
+import { type InsertJobFileRefRow, jobFileRefTable } from '@data/db/schemas/fileRelations'
 import { assistantDataService } from '@data/services/AssistantService'
 import type { PersonGeneration } from '@google/genai'
 import { loggerService } from '@logger'
@@ -605,6 +606,21 @@ export class AiService extends BaseService {
       cleanupPolicy: request.cleanupPolicy
     }
     const handle: JobHandle = jobManager.enqueue('image-generation.generate', payload)
+
+    // Persist a job→file ref for every input the job reads. The ids also live
+    // in `job.input` JSON, but the cleanup anti-join cannot see JSON — without a
+    // real ref row, a non-terminal job whose `delete_when_unreferenced` inputs
+    // aged past the grace window could have them reclaimed before startup
+    // recovery resumes it (file-entry-cleanup.md §5.1). The job row exists now
+    // (enqueue committed it), so the FK is satisfied; deleting the job row later
+    // cascades these refs, releasing the inputs for reclaim.
+    const jobFileRefRows: InsertJobFileRefRow[] = [
+      ...(inputFileIds ?? []).map((fileEntryId) => ({ fileEntryId, sourceId: handle.id, role: 'input' as const })),
+      ...(maskFileId ? [{ fileEntryId: maskFileId, sourceId: handle.id, role: 'mask' as const }] : [])
+    ]
+    if (jobFileRefRows.length > 0) {
+      application.get('DbService').getDb().insert(jobFileRefTable).values(jobFileRefRows).run()
+    }
 
     // Reuse the existing IPC AbortController (ai.abort_image): when it fires,
     // cancel the job (which aborts the handler + remote task).

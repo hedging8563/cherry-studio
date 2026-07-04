@@ -88,7 +88,7 @@ There is **no queue and no trigger**: the candidate set is fully derivable from 
 
 ### 5.1 Candidate query
 
-Reuses the anti-join skeleton of `FileEntryService.findUnreferenced`:
+Reuses the anti-join skeleton of `FileEntryService.findManualUnreferenced`:
 
 ```sql
 SELECT id FROM file_entry
@@ -96,9 +96,12 @@ WHERE cleanup_policy = 'delete_when_unreferenced'
   AND created_at < :now - :grace
   AND NOT EXISTS (SELECT 1 FROM chat_message_file_ref r WHERE r.file_entry_id = file_entry.id)
   AND NOT EXISTS (SELECT 1 FROM painting_file_ref  r WHERE r.file_entry_id = file_entry.id)
+  AND NOT EXISTS (SELECT 1 FROM job_file_ref        r WHERE r.file_entry_id = file_entry.id)
 ORDER BY created_at
 LIMIT :batch   -- default 100 per pass
 ```
+
+The `job_file_ref` clause is what keeps async image-generation job inputs alive: those input images / mask are `delete_when_unreferenced` entries whose ids live only in `job.input` JSON (invisible to the anti-join), so a live job holds them through a real ref row instead. Without it, a non-terminal job whose inputs aged past the grace window could have them reclaimed by a startup / interval pass before recovery resumes it, breaking `read(inputFileIds)`. Deleting the job row (terminal-row pruning) cascades the ref, releasing the inputs for reclaim.
 
 - `deleted_at` is **not** filtered: a trashed zero-ref auto entry is reclaimed too (the user already discarded it, and trash auto-expiry is deferred).
 - The unique index `(file_entry_id, source_id, role)` on each ref table backs the `NOT EXISTS` probes; at desktop scale the query is single-digit ms. A partial index on `cleanup_policy = 'delete_when_unreferenced'` is the first cheap lever if it ever measures slow (§11).
