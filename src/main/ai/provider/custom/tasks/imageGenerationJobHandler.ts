@@ -5,7 +5,7 @@ import type { JobContext, JobHandler } from '@main/core/job/types'
 import { modelService } from '@main/data/services/ModelService'
 import { providerService } from '@main/data/services/ProviderService'
 import { downloadImageAsBase64 } from '@main/utils/downloadAsBase64'
-import type { FileEntry } from '@shared/data/types/file/fileEntry'
+import type { CleanupPolicy, FileEntry } from '@shared/data/types/file/fileEntry'
 import { parseUniqueModelId } from '@shared/data/types/model'
 
 import { providerToAiSdkConfig } from '../../config'
@@ -84,7 +84,7 @@ export const imageGenerationJobHandler: JobHandler<ImageGenerationJobPayload> = 
       throw new Error(`Image generation for '${sdkConfig.modelId}' completed but returned no image URLs`)
     }
 
-    const files = await downloadAndPersistImageUrls(urls, ctx.signal)
+    const files = await downloadAndPersistImageUrls(urls, ctx.signal, input.cleanupPolicy)
     ctx.reportProgress(100, { stage: 'done' })
     return { files } satisfies ImageGenerationJobOutput
   }
@@ -149,7 +149,11 @@ async function pollUntilDone(
 }
 
 /** Download result URLs (always non-empty — the caller guards) and persist each as an internal FileEntry. */
-async function downloadAndPersistImageUrls(urls: string[], signal: AbortSignal): Promise<FileEntry[]> {
+async function downloadAndPersistImageUrls(
+  urls: string[],
+  signal: AbortSignal,
+  cleanupPolicy: CleanupPolicy
+): Promise<FileEntry[]> {
   const fileManager = application.get('FileManager')
   const files: FileEntry[] = []
   for (const url of urls) {
@@ -160,7 +164,7 @@ async function downloadAndPersistImageUrls(urls: string[], signal: AbortSignal):
       await fileManager.createInternalEntry({
         source: 'base64',
         data: `data:${downloaded.media_type || 'image/png'};base64,${downloaded.data}`,
-        cleanupPolicy: 'delete_when_unreferenced'
+        cleanupPolicy
       })
     )
   }

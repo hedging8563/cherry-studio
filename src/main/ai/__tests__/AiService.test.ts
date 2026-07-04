@@ -186,6 +186,7 @@ describe('AiService', () => {
       numInferenceSteps: 30,
       guidanceScale: 4.5,
       promptEnhancement: true,
+      cleanupPolicy: 'delete_when_unreferenced',
       requestOptions: { signal: new AbortController().signal }
     })
 
@@ -250,7 +251,8 @@ describe('AiService', () => {
     await service.generateImage({
       uniqueModelId: 'test-provider::test-model',
       prompt: 'draw a cat',
-      size: 'auto'
+      size: 'auto',
+      cleanupPolicy: 'delete_when_unreferenced'
     })
 
     const callOptions = mockGenerateImage.mock.calls[0]?.[2] as Record<string, unknown>
@@ -704,7 +706,7 @@ describe('AiService tool approval', () => {
 
 describe('imageInputEntryParams', () => {
   it('maps a base64 data URL to a base64 entry', () => {
-    expect(imageInputEntryParams('data:image/png;base64,AAAA')).toEqual({
+    expect(imageInputEntryParams('data:image/png;base64,AAAA', 'delete_when_unreferenced')).toEqual({
       source: 'base64',
       data: 'data:image/png;base64,AAAA',
       cleanupPolicy: 'delete_when_unreferenced'
@@ -712,7 +714,7 @@ describe('imageInputEntryParams', () => {
   })
 
   it('maps an http(s) URL to a url entry (preserves the inputImages URL contract)', () => {
-    expect(imageInputEntryParams('https://cdn.example.com/in.png')).toEqual({
+    expect(imageInputEntryParams('https://cdn.example.com/in.png', 'delete_when_unreferenced')).toEqual({
       source: 'url',
       url: 'https://cdn.example.com/in.png',
       cleanupPolicy: 'delete_when_unreferenced'
@@ -751,6 +753,7 @@ describe('AiService.generateImage — custom async transport (job path)', () => 
       uniqueModelId: 'ppio::qwen-image',
       prompt: 'a cat',
       inputImages: ['data:image/png;base64,AAAA'],
+      cleanupPolicy: 'delete_when_unreferenced',
       requestOptions: { signal: new AbortController().signal }
     })
 
@@ -785,9 +788,13 @@ describe('AiService.generateImage — custom async transport (job path)', () => 
       return undefined
     })
 
-    await expect(service.generateImage({ uniqueModelId: 'ppio::qwen-image', prompt: 'a cat' })).rejects.toThrow(
-      'vendor exploded'
-    )
+    await expect(
+      service.generateImage({
+        uniqueModelId: 'ppio::qwen-image',
+        prompt: 'a cat',
+        cleanupPolicy: 'delete_when_unreferenced'
+      })
+    ).rejects.toThrow('vendor exploded')
   })
 
   it('cancels the job and throws AbortError when the request is aborted', async () => {
@@ -815,6 +822,7 @@ describe('AiService.generateImage — custom async transport (job path)', () => 
       service.generateImage({
         uniqueModelId: 'ppio::qwen-image',
         prompt: 'a cat',
+        cleanupPolicy: 'delete_when_unreferenced',
         requestOptions: { signal: controller.signal }
       })
     ).rejects.toThrow(/abort/i)
@@ -842,7 +850,8 @@ describe('AiService.generateImage — custom async transport (job path)', () => 
       service.generateImage({
         uniqueModelId: 'ppio::qwen-image',
         prompt: 'edit',
-        inputImages: ['data:image/png;base64,AAAA']
+        inputImages: ['data:image/png;base64,AAAA'],
+        cleanupPolicy: 'delete_when_unreferenced'
       })
     ).rejects.toThrow('enqueue boom')
   })

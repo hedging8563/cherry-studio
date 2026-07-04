@@ -18,7 +18,7 @@ import { downloadImageAsBase64 } from '@main/utils/downloadAsBase64'
 import type { AiToolApprovalRespondRequest, AiToolApprovalRespondResponse } from '@shared/ai/transport'
 import type { JobSnapshot } from '@shared/data/api/schemas/jobs'
 import { type Assistant } from '@shared/data/types/assistant'
-import type { FileEntry } from '@shared/data/types/file/fileEntry'
+import type { CleanupPolicy, FileEntry } from '@shared/data/types/file/fileEntry'
 import { type Model, parseUniqueModelId } from '@shared/data/types/model'
 import { IpcChannel } from '@shared/IpcChannel'
 import type { Base64String, UrlString } from '@shared/types/file/common'
@@ -104,6 +104,12 @@ export interface AiImageRequest extends AiBaseRequest {
   style?: string
   /** Vendor-specific image params keyed by provider id; mapped to AI SDK provider options in main. */
   providerOptions?: Record<string, Record<string, unknown>>
+  /**
+   * Cleanup policy stamped on every FileEntry this request persists (input
+   * images, mask, generated outputs). AiService is infrastructure — the
+   * calling business feature decides the policy (file-entry-cleanup.md §4.1).
+   */
+  cleanupPolicy: CleanupPolicy
 }
 
 /** Image generation result — persisted file entries (main writes the bytes). */
@@ -117,10 +123,10 @@ export interface AiImageResult {
  * image edits through the job: `data:` strings become base64 entries, `http(s)` URLs
  * become downloaded url entries. Either way the handler later reads the bytes by id.
  */
-export function imageInputEntryParams(value: string): CreateInternalEntryIpcParams {
+export function imageInputEntryParams(value: string, cleanupPolicy: CleanupPolicy): CreateInternalEntryIpcParams {
   return value.startsWith('data:')
-    ? { source: 'base64', data: value as Base64String, cleanupPolicy: 'delete_when_unreferenced' }
-    : { source: 'url', url: value as UrlString, cleanupPolicy: 'delete_when_unreferenced' }
+    ? { source: 'base64', data: value as Base64String, cleanupPolicy }
+    : { source: 'url', url: value as UrlString, cleanupPolicy }
 }
 
 /**
@@ -549,7 +555,7 @@ export class AiService extends BaseService {
     const fileManager = application.get('FileManager')
     const files = await Promise.all(
       dataUrls.map((data) =>
-        fileManager.createInternalEntry({ source: 'base64', data, cleanupPolicy: 'delete_when_unreferenced' })
+        fileManager.createInternalEntry({ source: 'base64', data, cleanupPolicy: request.cleanupPolicy })
       )
     )
 
@@ -575,7 +581,7 @@ export class AiService extends BaseService {
     const jobManager = application.get('JobManager')
 
     const persistInputImage = async (value: string): Promise<string> => {
-      const entry = await fileManager.createInternalEntry(imageInputEntryParams(value))
+      const entry = await fileManager.createInternalEntry(imageInputEntryParams(value, request.cleanupPolicy))
       return entry.id
     }
 
@@ -595,7 +601,8 @@ export class AiService extends BaseService {
       seed: request.seed,
       ...(inputFileIds && { inputFileIds }),
       ...(maskFileId && { maskFileId }),
-      providerParams
+      providerParams,
+      cleanupPolicy: request.cleanupPolicy
     }
     const handle: JobHandle = jobManager.enqueue('image-generation.generate', payload)
 

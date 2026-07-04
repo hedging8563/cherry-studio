@@ -1,4 +1,4 @@
-import type { FileEntry } from '@shared/data/types/file/fileEntry'
+import type { CleanupPolicy, FileEntry } from '@shared/data/types/file/fileEntry'
 import type { UniqueModelId } from '@shared/data/types/model'
 
 /**
@@ -24,6 +24,8 @@ export interface ImageGenerationJobPayload {
   inputFileIds?: string[]
   maskFileId?: string
   providerParams: Record<string, unknown>
+  /** Stamped on the persisted output FileEntries — decided by the requesting business feature. */
+  cleanupPolicy: CleanupPolicy
 }
 
 /** Job output — the persisted result FileEntries the IPC layer returns verbatim. */

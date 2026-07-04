@@ -62,6 +62,8 @@ export function generatePainting(opts: GeneratePaintingOptions): Promise<FileMet
         payload: {
           uniqueModelId: `${opts.provider.id}::${opts.modelId}`,
           prompt: opts.prompt,
+          // Painting-owned images: reaped once no painting references them (file-entry-cleanup.md §4.1).
+          cleanupPolicy: 'delete_when_unreferenced',
           ...(inputImages.length > 0 && { inputImages }),
           ...(aiSdkParams.batchSize !== undefined && { n: aiSdkParams.batchSize }),
           ...(aiSdkParams.imageSize && { size: aiSdkParams.imageSize }),

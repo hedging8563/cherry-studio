@@ -59,7 +59,8 @@ function createCtx(
       prompt: 'a cat',
       n: 1,
       size: '1024x1024',
-      providerParams: { modelDescriptor: { id: 'qwen-image', isSync: false } }
+      providerParams: { modelDescriptor: { id: 'qwen-image', isSync: false } },
+      cleanupPolicy: 'delete_when_unreferenced'
     },
     attempt: 0,
     signal: controller.signal,
@@ -95,7 +96,8 @@ describe('imageGenerationJobHandler contract', () => {
       imageGenerationJobHandler.defaultQueue?.({
         uniqueModelId: 'ppio::qwen-image',
         n: 1,
-        providerParams: {}
+        providerParams: {},
+        cleanupPolicy: 'delete_when_unreferenced'
       })
     ).toBe('image-generation.ppio')
     expect(imageGenerationJobHandler.defaultConcurrency).toBe(2)
@@ -184,7 +186,8 @@ describe('imageGenerationJobHandler.execute', () => {
         prompt: 'edit',
         n: 1,
         providerParams: {},
-        inputFileIds: ['in-1']
+        inputFileIds: ['in-1'],
+        cleanupPolicy: 'delete_when_unreferenced'
       }
     })
     await imageGenerationJobHandler.execute(ctx)
@@ -198,7 +201,14 @@ describe('imageGenerationJobHandler.execute', () => {
     submitMock.mockRejectedValue(new Error('vendor 500'))
 
     const ctx = createCtx({
-      input: { uniqueModelId: 'ppio::qwen-image', prompt: 'x', n: 1, providerParams: {}, inputFileIds: ['in-1'] }
+      input: {
+        uniqueModelId: 'ppio::qwen-image',
+        prompt: 'x',
+        n: 1,
+        providerParams: {},
+        inputFileIds: ['in-1'],
+        cleanupPolicy: 'delete_when_unreferenced'
+      }
     })
     await expect(imageGenerationJobHandler.execute(ctx)).rejects.toThrow('vendor 500')
   })

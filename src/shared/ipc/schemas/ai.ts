@@ -7,7 +7,7 @@ import type {
   StreamDonePayload,
   StreamErrorPayload
 } from '@shared/ai/transport'
-import { type FileEntry, FileEntrySchema } from '@shared/data/types/file/fileEntry'
+import { CleanupPolicySchema, type FileEntry, FileEntrySchema } from '@shared/data/types/file/fileEntry'
 import type { CherryMessagePart } from '@shared/data/types/message'
 import { ModelSchema, type UniqueModelId } from '@shared/data/types/model'
 import type { EmbeddingModelUsage, LanguageModelUsage, ModelMessage } from 'ai'
@@ -64,7 +64,10 @@ const aiImagePayloadSchema = z.strictObject({
   background: z.string().optional(),
   moderation: z.string().optional(),
   style: z.string().optional(),
-  providerOptions: z.record(z.string(), z.record(z.string(), z.unknown())).optional()
+  providerOptions: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+  // Required: the calling business feature decides the cleanup intent for every
+  // FileEntry the request persists (file-entry-cleanup.md §4.1) — main never defaults it.
+  cleanupPolicy: CleanupPolicySchema
 })
 
 export const aiRequestSchemas = {
