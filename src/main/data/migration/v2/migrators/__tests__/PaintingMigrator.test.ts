@@ -306,6 +306,14 @@ describe('PaintingMigrator painting_file_ref integration', () => {
     expect(refRows).toHaveLength(FILE_COUNT)
     expect((migrator as unknown as { droppedFileRefs: number }).droppedFileRefs).toBe(0)
 
+    // Every referenced entry must flip to auto — the >500-id chunked UPDATE in
+    // markEntriesAutoCleanup must cover all 1200. A chunk off-by-one would leave
+    // some referenced files stuck on 'manual' (never reclaimed) and go unnoticed.
+    const autoCount = dbh.sqlite
+      .prepare(`SELECT COUNT(*) AS c FROM file_entry WHERE cleanup_policy = 'delete_when_unreferenced'`)
+      .get() as { c: number }
+    expect(autoCount.c).toBe(FILE_COUNT)
+
     const fkCheck = dbh.sqlite.pragma('foreign_key_check')
     expect(fkCheck).toHaveLength(0)
   })

@@ -258,6 +258,75 @@ describe('entryCleanup', () => {
     expect(drained.deleted).toBe(25) // batch limit 100 > 25, single pass drains them all
   })
 
+  it('aborts when candidates exceed the batch limit (fraction keys off the true count, not batch.length)', async () => {
+    // 120 auto candidates, total 120 → fraction 100%. The abort must use the real
+    // candidate COUNT (120), not the ≤100 batch slice — a `batch.length` numerator
+    // would read 100 and still trip here, but this pins that a >batch-limit backlog
+    // aborts rather than silently draining 100/pass past the safety gate.
+    for (let i = 0; i < 120; i++) await seedInternal(nthId(400 + i), 'delete_when_unreferenced', { withBlob: false })
+    const report = await runEntryCleanup(makeDeps())
+    expect(report.candidates).toBe(120)
+    expect(report.totalEntries).toBe(120)
+    expect(report.outcome).toBe('aborted')
+    expect(fileEntryService.countAll()).toBe(120)
+  })
+
+  it('does not abort when the count is ≥20 but the fraction is ≤50%', async () => {
+    // 20 auto + 30 manual → total 50, 20 is not > 25. The count leg alone must not
+    // trip the gate; both legs are required.
+    for (let i = 0; i < 20; i++) await seedInternal(nthId(500 + i), 'delete_when_unreferenced', { withBlob: false })
+    for (let i = 0; i < 30; i++) await seedInternal(nthId(600 + i), 'manual', { withBlob: false })
+    const report = await runEntryCleanup(makeDeps())
+    expect(report.outcome).toBe('completed')
+    expect(report.deleted).toBe(20)
+  })
+
+  it('counts gonePinned when the tx re-read finds the row gone (or pinned) mid-flight', async () => {
+    const id = nthId(13)
+    await seedInternal(id, 'delete_when_unreferenced')
+    const deps = makeDeps()
+    // Row vanished (or was pinned to manual) between the candidate query and the
+    // serialized re-read → gone-or-pinned, no delete, no data loss.
+    const spy = vi.spyOn(deps.fileEntryService, 'findByIdTx').mockImplementationOnce(() => null)
+    const report = await runEntryCleanup(deps)
+    expect(report.gonePinned).toBe(1)
+    expect(report.deleted).toBe(0)
+    expect(fileEntryService.findById(id)).not.toBeNull()
+    spy.mockRestore()
+  })
+
+  it('counts failed and preserves the entry when a candidate throws (retried next pass)', async () => {
+    const id = nthId(14)
+    await seedInternal(id, 'delete_when_unreferenced')
+    const deps = makeDeps()
+    const spy = vi.spyOn(deps.fileEntryService, 'withWriteTx').mockImplementationOnce(() => {
+      throw new Error('tx boom')
+    })
+    const report = await runEntryCleanup(deps)
+    expect(report.failed).toBe(1)
+    expect(report.deleted).toBe(0)
+    expect(fileEntryService.findById(id)).not.toBeNull()
+    spy.mockRestore()
+  })
+
+  it('reports failed with the raw error (stack) logged when the pass throws before the loop', async () => {
+    const deps = makeDeps()
+    const spy = vi.spyOn(deps.fileEntryService, 'countCleanupCandidates').mockImplementation(() => {
+      throw new Error('db exploded')
+    })
+    const errorSpy = vi.spyOn(loggerService, 'error')
+    const report = await runEntryCleanup(deps)
+    expect(report.outcome).toBe('failed')
+    expect(report.errorMessage).toBe('db exploded')
+    // The raw Error is passed first (stack preserved), not just its message string.
+    expect(errorSpy).toHaveBeenCalledWith(
+      'file-entry-cleanup',
+      expect.any(Error),
+      expect.objectContaining({ event: 'file-entry-cleanup', outcome: 'failed' })
+    )
+    spy.mockRestore()
+  })
+
   it('respects the batch limit and reports total candidates', async () => {
     expect(ENTRY_CLEANUP_BATCH_LIMIT).toBe(100)
     for (let i = 0; i < 5; i++) await seedInternal(nthId(200 + i), 'delete_when_unreferenced')

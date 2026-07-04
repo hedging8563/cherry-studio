@@ -3,8 +3,7 @@ import {
   chatMessageFileRefTable,
   jobFileRefTable,
   paintingFileRefTable,
-  persistentFileRefTablesBySourceType,
-  persistentRefAbsenceConditions
+  persistentFileRefTablesBySourceType
 } from '@data/db/schemas/fileRelations'
 import { jobTable } from '@data/db/schemas/job'
 import { messageTable } from '@data/db/schemas/message'
@@ -15,7 +14,7 @@ import type { CanonicalExternalPath, FileEntryId } from '@shared/data/types/file
 import { setupTestDatabase } from '@test-helpers/db'
 import { MockMainDbServiceExport, MockMainDbServiceUtils } from '@test-mocks/main/DbService'
 import { mockMainLoggerService } from '@test-mocks/MainLoggerService'
-import { eq } from 'drizzle-orm'
+import { eq, getTableName } from 'drizzle-orm'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // `@logger` is mocked globally by tests/main.setup.ts with the unified
@@ -1645,9 +1644,51 @@ describe('FileEntryService', () => {
       expect(fileEntryService.countCleanupCandidates(HOUR)).toBe(5)
     })
 
-    it('anti-join covers every registered persistent ref table', () => {
-      const conditions = persistentRefAbsenceConditions()
-      expect(conditions).toHaveLength(Object.keys(persistentFileRefTablesBySourceType).length)
+    it('excludes candidates referenced by any registered persistent ref table (behavioral coverage)', async () => {
+      // Behavioral replacement for the old length-vs-length tautology: seed one
+      // auto candidate held by EACH persistent ref table plus one unreferenced
+      // control, and assert the cleanup-candidate path excludes every held one.
+      const paintingRef = '019606a0-0000-7000-8000-0000000ce001' as FileEntryId
+      const chatRef = '019606a0-0000-7000-8000-0000000ce002' as FileEntryId
+      const jobRef = '019606a0-0000-7000-8000-0000000ce003' as FileEntryId
+      const orphan = '019606a0-0000-7000-8000-0000000ce004' as FileEntryId
+      for (const id of [paintingRef, chatRef, jobRef, orphan]) {
+        await seedEntry(id, 'delete_when_unreferenced', 2 * HOUR)
+      }
+      await seedRef(paintingRef)
+      await seedChatRef(chatRef)
+      await seedJobRef(jobRef)
+
+      const ids = fileEntryService.findCleanupCandidates({ graceMs: HOUR, limit: 100 }).map((e) => e.id)
+      expect(ids).toEqual([orphan])
+    })
+
+    it('every table with an FK to file_entry is registered in the anti-join (fail-open guard)', () => {
+      // `satisfies Record<PersistentFileRefSourceType>` forces registered *types*
+      // into the map, but cannot force every physical FK-to-file_entry table to
+      // be registered. A ref table left out makes entries it alone references
+      // look unreferenced → the GC deletes them (data loss). Reflect the live
+      // schema so a forgotten registration fails CI, not production.
+      const registered = new Set(Object.values(persistentFileRefTablesBySourceType).map((t) => getTableName(t)))
+      // Reflect the live schema via the `pragma_foreign_key_list` table-valued
+      // function so a table with an FK to file_entry(id) but no registry entry
+      // fails here. `table` is a keyword, hence the quotes.
+      const referencingFileEntry = (
+        dbh.sqlite
+          .prepare(
+            `SELECT DISTINCT m.name AS name
+             FROM sqlite_master m
+             JOIN pragma_foreign_key_list(m.name) fk
+             WHERE m.type = 'table' AND fk."table" = 'file_entry'`
+          )
+          .all() as Array<{ name: string }>
+      ).map((r) => r.name)
+
+      // Sanity: the reflection actually found the ref tables (guards a silent no-op).
+      expect(referencingFileEntry.length).toBeGreaterThan(0)
+      for (const name of referencingFileEntry) {
+        expect(registered).toContain(name)
+      }
     })
 
     it('excludes an auto entry held by a job_file_ref, and reclaims it once the job row is gone', async () => {
