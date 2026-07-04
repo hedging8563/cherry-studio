@@ -23,6 +23,7 @@ const file: FileItem = {
   createdAt: '2026-06-24 10:00',
   updatedAt: '2026-06-24 10:00',
   trashed: false,
+  cleanupPolicy: 'manual',
   origin: 'internal',
   type: 'text'
 }
@@ -31,7 +32,8 @@ const menuActions: FileContextMenuActions = {
   onRename: vi.fn(),
   onDelete: vi.fn(),
   onRestore: vi.fn(),
-  onShowInFolder: vi.fn()
+  onShowInFolder: vi.fn(),
+  onTogglePin: vi.fn()
 }
 
 function fileListProps(renamingId: string | null): ComponentProps<typeof FileList> {

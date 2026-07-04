@@ -13,7 +13,7 @@ import {
   EmptyState,
   Scrollbar
 } from '@cherrystudio/ui'
-import { useInfiniteFlatItems, useInfiniteQuery, useQuery } from '@data/hooks/useDataApi'
+import { useInfiniteFlatItems, useInfiniteQuery, useMutation, useQuery } from '@data/hooks/useDataApi'
 import { loggerService } from '@logger'
 import { ipcApi } from '@renderer/ipc'
 import { safeOpen } from '@renderer/utils/file/safeOpen'
@@ -188,6 +188,7 @@ function toFileItem(
     createdAt: formatDateTime(createdAt),
     updatedAt: formatDateTime(updatedAt),
     trashed: entry.origin === 'internal' && entry.deletedAt !== undefined,
+    cleanupPolicy: entry.cleanupPolicy,
     danglingState,
     isMissing
   }
@@ -259,7 +260,8 @@ const FileToolbar = memo(function FileToolbar({
   onEmptyTrash,
   onBatchDelete,
   onBatchRestore,
-  onSelectAll
+  onSelectAll,
+  onCleanupUnreferenced
 }: {
   showSelectionControls: boolean
   selectionControlsDisabled: boolean
@@ -274,6 +276,7 @@ const FileToolbar = memo(function FileToolbar({
   onBatchDelete: () => void
   onBatchRestore: () => void
   onSelectAll: (checked: boolean) => void
+  onCleanupUnreferenced: () => void
 }) {
   const { t } = useTranslation()
   const allSelected = visibleSelectionState === true
@@ -341,16 +344,34 @@ const FileToolbar = memo(function FileToolbar({
           className="h-8 px-2.5 text-destructive/65 text-xs hover:bg-destructive/[0.08] hover:text-destructive disabled:text-muted-foreground/35">
           {t('files.empty_trash')}
         </Button>
-      ) : showUpload ? (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onUpload}
-          className="h-8 gap-1.5 px-2.5 text-muted-foreground text-xs">
-          <Upload size={13} />
-          <span>{t('files.upload')}</span>
-        </Button>
-      ) : null}
+      ) : (
+        <>
+          {showUpload && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onUpload}
+              className="h-8 gap-1.5 px-2.5 text-muted-foreground text-xs">
+              <Upload size={13} />
+              <span>{t('files.upload')}</span>
+            </Button>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                aria-label={t('files.cleanup.label')}>
+                <MoreHorizontal size={15} strokeWidth={1.8} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-44">
+              <DropdownMenuItem onSelect={onCleanupUnreferenced}>{t('files.cleanup.label')}</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
+      )}
     </div>
   )
 })
@@ -827,14 +848,55 @@ function FilesPage() {
     setRenamingId(id)
   }, [])
 
+  // Retention flip (pin/unpin) — a side-effect-free cleanupPolicy PATCH; the
+  // list re-reads so the menu reflects the new state (file-entry-cleanup.md §4.2).
+  const { trigger: patchCleanupPolicy } = useMutation('PATCH', '/files/entries/:id')
+  const handleTogglePin = useCallback(
+    async (id: string, pin: boolean) => {
+      try {
+        await patchCleanupPolicy({
+          params: { id },
+          body: { cleanupPolicy: pin ? 'manual' : 'delete_when_unreferenced' }
+        })
+        void refreshActiveFiles()
+      } catch {
+        window.toast?.error(t('files.pin_failed'))
+      }
+    },
+    [patchCleanupPolicy, refreshActiveFiles, t]
+  )
+
+  // Escape valve for the cleanup safety abort (file-entry-cleanup.md §5.3): a
+  // legitimate small-library bulk delete can trip the count-fraction threshold,
+  // which then latches until the user confirms this drain. Force-runs the pass.
+  const handleCleanupUnreferenced = useCallback(async () => {
+    const confirmed = await window.modal.confirm({
+      title: t('files.cleanup.confirm_title'),
+      content: t('files.cleanup.confirm_content'),
+      centered: true,
+      okText: t('files.cleanup.confirm_ok'),
+      cancelText: t('common.cancel')
+    })
+    if (!confirmed) return
+    try {
+      const report = await window.api.file.runSweep({ confirmed: true })
+      window.toast?.success(t('files.cleanup.done', { count: report.entryCleanup.deleted }))
+      void refreshActiveFiles()
+      void refetchFileStats()
+    } catch {
+      window.toast?.error(t('files.cleanup.failed'))
+    }
+  }, [refreshActiveFiles, refetchFileStats, t])
+
   const listMenuActions = useMemo<FileContextMenuActions>(
     () => ({
       onRename: startInlineRename,
       onDelete: (id) => handleDelete(new Set([id])),
       onRestore: (id) => void handleRestore(new Set([id])),
-      onShowInFolder: handleShowInFolder
+      onShowInFolder: handleShowInFolder,
+      onTogglePin: (id, pin) => void handleTogglePin(id, pin)
     }),
-    [handleDelete, handleRestore, handleShowInFolder, startInlineRename]
+    [handleDelete, handleRestore, handleShowInFolder, startInlineRename, handleTogglePin]
   )
 
   const handleSort = useCallback(
@@ -941,6 +1003,7 @@ function FilesPage() {
             onBatchDelete={() => handleDelete()}
             onBatchRestore={() => void handleRestore(new Set(selectedIds))}
             onSelectAll={handleSelectAllVisible}
+            onCleanupUnreferenced={() => void handleCleanupUnreferenced()}
           />
         )}
 

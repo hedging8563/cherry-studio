@@ -2319,6 +2319,14 @@
     "audio": "音訊",
     "batch_delete": "批次刪除",
     "batch_operation": "全選",
+    "cleanup": {
+      "confirm_content": "永久刪除已無任何對話或繪圖引用的自動管理檔案。已釘到檔案庫的檔案會保留。",
+      "confirm_ok": "清理",
+      "confirm_title": "清理未引用檔案？",
+      "done": "已清理 {{count}} 個檔案",
+      "failed": "清理失敗",
+      "label": "清理未引用檔案"
+    },
     "count": "個檔案",
     "created_at": "建立時間",
     "delete": {
@@ -2364,6 +2372,8 @@
       "description": "將永久刪除 {{count}} 個檔案，此操作無法復原。",
       "title": "永久刪除檔案？"
     },
+    "pin": "釘到檔案庫",
+    "pin_failed": "更新檔案失敗",
     "preview": {
       "error": "開啟檔案失敗"
     },
@@ -2381,6 +2391,7 @@
     "title": "檔案",
     "trash": "回收站",
     "type": "類型",
+    "unpin": "從檔案庫取消釘選",
     "upload": "上傳檔案",
     "video": "影片"
   },

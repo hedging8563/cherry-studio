@@ -1296,12 +1296,14 @@
       "add": "タグ追加",
       "delete": "タグ削除",
       "deleteConfirm": "このタグを削除してもよろしいですか？",
+      "group_by": "[to be translated]:Group by tag",
       "manage": "タグ管理",
       "modify": "タグ修正",
       "none": "タグなし",
       "settings": {
         "title": "タグ設定"
       },
+      "ungroup": "[to be translated]:Turn off tag grouping",
       "untagged": "未分類"
     },
     "title": "アシスタント",
@@ -1613,6 +1615,13 @@
       "top": "トップに戻る"
     },
     "resend": "再送信",
+    "resource_view": {
+      "menu": {
+        "agent": "[to be translated]:Agents",
+        "assistant": "[to be translated]:Assistants",
+        "skill": "[to be translated]:Skills"
+      }
+    },
     "save": {
       "file": {
         "title": "ローカルファイルに保存"
@@ -2309,6 +2318,14 @@
     "audio": "オーディオ",
     "batch_delete": "一括削除",
     "batch_operation": "すべて選択",
+    "cleanup": {
+      "confirm_content": "[to be translated]:Permanently delete auto-managed files that no chat or painting still references. Files you pinned to the library are kept.",
+      "confirm_ok": "[to be translated]:Clean up",
+      "confirm_title": "[to be translated]:Clean up unreferenced files?",
+      "done": "[to be translated]:Cleaned up {{count}} file(s)",
+      "failed": "[to be translated]:Cleanup failed",
+      "label": "[to be translated]:Clean up unreferenced files"
+    },
     "count": "ファイル",
     "created_at": "作成日",
     "delete": {
@@ -2328,6 +2345,7 @@
       "no_match_description": "現在のフィルターに一致するファイルはありません",
       "no_match_title": "一致するファイルが見つかりません"
     },
+    "empty_trash": "[to be translated]:Empty trash",
     "error": {
       "delete_failed": "ファイルの削除に失敗しました",
       "delete_partial_failed": "一部のファイルを削除できませんでした",
@@ -2345,6 +2363,7 @@
     "missing": "欠落",
     "modified_at": "更新日時",
     "name": "名前",
+    "no_actions": "[to be translated]:No actions available",
     "open": "開く",
     "other": "その他",
     "permanent_delete": "完全に削除",
@@ -2352,19 +2371,27 @@
       "description": "これにより、{{count}}個のファイルが永久に削除されます。この操作は元に戻せません。",
       "title": "ファイルを完全に削除しますか？"
     },
+    "pin": "[to be translated]:Pin to library",
+    "pin_failed": "[to be translated]:Failed to update the file",
     "preview": {
       "error": "ファイルを開くのに失敗しました"
     },
     "remove_from_library": "ライブラリから削除",
     "rename": "名前を変更",
     "restore": "復元",
+    "select_all": "[to be translated]:Select visible files",
+    "select_all_short": "[to be translated]:Select All",
+    "select_file": "[to be translated]:Select {{name}}",
     "selected_count": "{{count}}個のファイルが選択されています",
+    "selected_missing_hint": "[to be translated]:Some selected files are missing. Locate them or remove their records.",
     "show_in_folder": "フォルダーに表示",
     "size": "サイズ",
     "text": "テキスト",
     "title": "ファイル",
     "trash": "ゴミ",
     "type": "タイプ",
+    "unpin": "[to be translated]:Unpin from library",
+    "upload": "[to be translated]:Upload files",
     "video": "ビデオ"
   },
   "globalSearch": {
@@ -2748,7 +2775,6 @@
     },
     "meta": {
       "data_sources_count": "{{count}}件の情報源",
-      "documents_count": "{{count}} 件の文書",
       "updated_at": "更新日時 {{time}}"
     },
     "name_required": "ナレッジベース名は必須です",
@@ -2908,7 +2934,8 @@
       "preview_description": "概要",
       "preview_prompt": "プロンプト",
       "scroll_left": "カテゴリーを左にスクロール",
-      "scroll_right": "カテゴリを右にスクロール"
+      "scroll_right": "カテゴリを右にスクロール",
+      "title": "[to be translated]:Assistant Library"
     },
     "badge": {
       "update": "更新"
@@ -4694,6 +4721,7 @@
     "github": "GitHub Models",
     "gpustack": "GPUStack",
     "grok": "Grok",
+    "grok-cli": "[to be translated]:Grok CLI",
     "groq": "Groq",
     "huggingface": "ハギングフェイス",
     "hunyuan": "腾讯混元",
@@ -4717,6 +4745,8 @@
     "ollama": "Ollama",
     "open-mineru": "Open MinerU",
     "openai": "OpenAI",
+    "openai-codex": "[to be translated]:OpenAI Codex",
+    "opencode": "[to be translated]:OpenCode Go",
     "openrouter": "OpenRouter",
     "ovms": "Intel OVMS",
     "ovocr": "Intel OV(NPU) OCR",
@@ -6794,6 +6824,7 @@
         "reorderFailed": "プロンプトの並び替えに失敗しました",
         "updateFailed": "プロンプトの更新に失敗しました"
       },
+      "manage": "[to be translated]:Manage Prompts",
       "title": "プロンプト管理",
       "titleLabel": "タイトル",
       "titlePlaceholder": "プロンプトのタイトルを入力してください",
@@ -6952,6 +6983,16 @@
         "open_terminal": "[to be translated]:Open terminal to sign in",
         "recheck": "[to be translated]:Recheck"
       },
+      "codex": {
+        "account": "[to be translated]:Account: {{accountId}}",
+        "description": "[to be translated]:Sign in with your ChatGPT subscription",
+        "description_detail": "[to be translated]:This provider uses your ChatGPT Plus/Pro login (OAuth) to access OpenAI Codex models. Your browser will open to complete sign-in.",
+        "logged_in": "[to be translated]:Signed in to OpenAI Codex",
+        "sign_in_button": "[to be translated]:Sign in with ChatGPT",
+        "sign_in_failed": "[to be translated]:Sign-in failed. Please try again.",
+        "sign_in_success": "[to be translated]:Signed in to OpenAI Codex",
+        "signing_in": "[to be translated]:Waiting for browser…"
+      },
       "copilot": {
         "add_request_header": "Add header",
         "auth_failed": "Github Copilotの認証に失敗しました。",
@@ -7026,6 +7067,15 @@
       },
       "filter_agent": "フィルターエージェント対応プロバイダー",
       "get_api_key": "APIキーを取得",
+      "grok_cli": {
+        "description": "[to be translated]:Sign in with your SuperGrok subscription",
+        "description_detail": "[to be translated]:This provider uses your xAI SuperGrok login (OAuth) to access Grok CLI models (Grok Build, Composer). Your browser will open to complete sign-in.",
+        "logged_in": "[to be translated]:Signed in to Grok CLI",
+        "sign_in_button": "[to be translated]:Sign in with xAI",
+        "sign_in_failed": "[to be translated]:Sign-in failed. Please try again.",
+        "sign_in_success": "[to be translated]:Signed in to Grok CLI",
+        "signing_in": "[to be translated]:Waiting for browser…"
+      },
       "logo_upload_failed": "選択した画像を処理できませんでした",
       "misc": "その他",
       "more_endpoints": {
@@ -7546,7 +7596,6 @@
     "openclaw": "オープンクロー",
     "paintings": "ペインティング",
     "settings": "設定",
-    "store": "アシスタントライブラリ",
     "translate": "翻訳",
     "work": "仕事"
   },

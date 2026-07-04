@@ -6,7 +6,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger
 } from '@cherrystudio/ui'
-import { FolderClosed, Pencil, RotateCcw, Trash2 } from 'lucide-react'
+import { FolderClosed, Pencil, Pin, PinOff, RotateCcw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import type { FileItem } from './fileDisplay'
@@ -16,6 +16,8 @@ export interface FileContextMenuActions {
   onDelete: (id: string) => void
   onRestore: (id: string) => void
   onShowInFolder: (id: string) => void
+  /** Flip retention intent: pin = keep (`manual`), unpin = auto-reclaim (`delete_when_unreferenced`). */
+  onTogglePin: (id: string, pin: boolean) => void
 }
 
 /**
@@ -62,7 +64,8 @@ function FileContextMenuContent({
   const canUseFileActions = !file.isMissing
   const canRename = canUseFileActions && showRename
   const canShowInFolder = canUseFileActions
-  const hasPrimaryAction = canRename || canShowInFolder
+  // Pin is a pure DB retention flip — offered even for a missing external file.
+  const isPinned = file.cleanupPolicy === 'manual'
 
   if (isTrash) {
     return (
@@ -94,7 +97,12 @@ function FileContextMenuContent({
           <ContextMenuItemContent icon={<FolderClosed size={12} />}>{t('files.show_in_folder')}</ContextMenuItemContent>
         </ContextMenuItem>
       )}
-      {hasPrimaryAction && <ContextMenuSeparator />}
+      <ContextMenuItem onSelect={() => actions.onTogglePin(file.id, !isPinned)}>
+        <ContextMenuItemContent icon={isPinned ? <PinOff size={12} /> : <Pin size={12} />}>
+          {isPinned ? t('files.unpin') : t('files.pin')}
+        </ContextMenuItemContent>
+      </ContextMenuItem>
+      <ContextMenuSeparator />
       <ContextMenuItem variant="destructive" onSelect={() => actions.onDelete(file.id)}>
         <ContextMenuItemContent icon={<Trash2 size={12} />}>
           {file.origin === 'external' ? t('files.remove_from_library') : t('files.delete.label')}

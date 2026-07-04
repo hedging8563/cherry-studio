@@ -1,4 +1,4 @@
-import type { DanglingState, FileEntryOrigin } from '@shared/data/types/file'
+import type { CleanupPolicy, DanglingState, FileEntryOrigin } from '@shared/data/types/file'
 import type { FileType } from '@shared/types/file'
 import { File, FileCode, FileText, Image as ImageIcon, Music, Video } from 'lucide-react'
 import type { FC } from 'react'
@@ -12,6 +12,8 @@ type FileItemCore = {
   createdAt: string
   updatedAt: string
   trashed: boolean
+  /** Retention intent — `manual` = pinned/kept, `delete_when_unreferenced` = auto-reclaimed. Backs the pin toggle. */
+  cleanupPolicy: CleanupPolicy
   danglingState?: DanglingState
   isMissing?: boolean
 }

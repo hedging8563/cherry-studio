@@ -1296,12 +1296,14 @@
       "add": "Agregar etiqueta",
       "delete": "Eliminar etiqueta",
       "deleteConfirm": "¿Está seguro de que desea eliminar esta etiqueta?",
+      "group_by": "[to be translated]:Group by tag",
       "manage": "Gestión de etiquetas",
       "modify": "Modificar etiqueta",
       "none": "Aún no hay etiquetas",
       "settings": {
         "title": "Configuración de etiquetas"
       },
+      "ungroup": "[to be translated]:Turn off tag grouping",
       "untagged": "Sin agrupar"
     },
     "title": "Asistente",
@@ -1613,6 +1615,13 @@
       "top": "Volver arriba"
     },
     "resend": "Reenviar",
+    "resource_view": {
+      "menu": {
+        "agent": "[to be translated]:Agents",
+        "assistant": "[to be translated]:Assistants",
+        "skill": "[to be translated]:Skills"
+      }
+    },
     "save": {
       "file": {
         "title": "Guardar en archivo local"
@@ -2309,6 +2318,14 @@
     "audio": "Audio",
     "batch_delete": "Eliminación masiva",
     "batch_operation": "Seleccionar todo",
+    "cleanup": {
+      "confirm_content": "[to be translated]:Permanently delete auto-managed files that no chat or painting still references. Files you pinned to the library are kept.",
+      "confirm_ok": "[to be translated]:Clean up",
+      "confirm_title": "[to be translated]:Clean up unreferenced files?",
+      "done": "[to be translated]:Cleaned up {{count}} file(s)",
+      "failed": "[to be translated]:Cleanup failed",
+      "label": "[to be translated]:Clean up unreferenced files"
+    },
     "count": "Número de archivos",
     "created_at": "Fecha de creación",
     "delete": {
@@ -2328,6 +2345,7 @@
       "no_match_description": "No hay archivos que coincidan con los filtros actuales",
       "no_match_title": "No se encontraron archivos coincidentes"
     },
+    "empty_trash": "[to be translated]:Empty trash",
     "error": {
       "delete_failed": "Error al eliminar archivos",
       "delete_partial_failed": "Algunos archivos no pudieron ser eliminados",
@@ -2345,6 +2363,7 @@
     "missing": "Faltante",
     "modified_at": "Modificado en",
     "name": "Nombre del archivo",
+    "no_actions": "[to be translated]:No actions available",
     "open": "Abrir",
     "other": "Otro",
     "permanent_delete": "Eliminar permanentemente",
@@ -2352,19 +2371,27 @@
       "description": "Esto eliminará permanentemente {{count}} archivo(s). Esta acción no se puede deshacer.",
       "title": "¿Eliminar archivos permanentemente?"
     },
+    "pin": "[to be translated]:Pin to library",
+    "pin_failed": "[to be translated]:Failed to update the file",
     "preview": {
       "error": "No se pudo abrir el archivo"
     },
     "remove_from_library": "Eliminar de la biblioteca",
     "rename": "Renombrar",
     "restore": "Restaurar",
+    "select_all": "[to be translated]:Select visible files",
+    "select_all_short": "[to be translated]:Select All",
+    "select_file": "[to be translated]:Select {{name}}",
     "selected_count": "{{count}} archivos seleccionados",
+    "selected_missing_hint": "[to be translated]:Some selected files are missing. Locate them or remove their records.",
     "show_in_folder": "Mostrar en carpeta",
     "size": "Tamaño",
     "text": "Texto",
     "title": "Archivo",
     "trash": "Basura",
     "type": "Tipo",
+    "unpin": "[to be translated]:Unpin from library",
+    "upload": "[to be translated]:Upload files",
     "video": "Video"
   },
   "globalSearch": {
@@ -2748,7 +2775,6 @@
     },
     "meta": {
       "data_sources_count": "{{count}} fuentes",
-      "documents_count": "{{count}} documentos",
       "updated_at": "Actualizado {{time}}"
     },
     "name_required": "Se requiere el nombre de la base de conocimientos",
@@ -2908,7 +2934,8 @@
       "preview_description": "Descripción general",
       "preview_prompt": "Indicación",
       "scroll_left": "Desplazar categorías a la izquierda",
-      "scroll_right": "Desplazar las categorías hacia la derecha"
+      "scroll_right": "Desplazar las categorías hacia la derecha",
+      "title": "[to be translated]:Assistant Library"
     },
     "badge": {
       "update": "Actualizar"
@@ -4694,6 +4721,7 @@
     "github": "GitHub Modelos",
     "gpustack": "GPUStack",
     "grok": "Grok",
+    "grok-cli": "[to be translated]:Grok CLI",
     "groq": "Groq",
     "huggingface": "Hugging Face",
     "hunyuan": "Tencent Hùnyuán",
@@ -4717,6 +4745,8 @@
     "ollama": "Ollama",
     "open-mineru": "Abrir MinerU",
     "openai": "OpenAI",
+    "openai-codex": "[to be translated]:OpenAI Codex",
+    "opencode": "[to be translated]:OpenCode Go",
     "openrouter": "OpenRouter",
     "ovms": "Intel OVMS",
     "ovocr": "Intel OV (NPU) OCR",
@@ -6794,6 +6824,7 @@
         "reorderFailed": "Error al reordenar los prompts",
         "updateFailed": "Error al actualizar el aviso"
       },
+      "manage": "[to be translated]:Manage Prompts",
       "title": "Gestión de Prompts",
       "titleLabel": "Título",
       "titlePlaceholder": "Introduce el título del prompt",
@@ -6952,6 +6983,16 @@
         "open_terminal": "[to be translated]:Open terminal to sign in",
         "recheck": "[to be translated]:Recheck"
       },
+      "codex": {
+        "account": "[to be translated]:Account: {{accountId}}",
+        "description": "[to be translated]:Sign in with your ChatGPT subscription",
+        "description_detail": "[to be translated]:This provider uses your ChatGPT Plus/Pro login (OAuth) to access OpenAI Codex models. Your browser will open to complete sign-in.",
+        "logged_in": "[to be translated]:Signed in to OpenAI Codex",
+        "sign_in_button": "[to be translated]:Sign in with ChatGPT",
+        "sign_in_failed": "[to be translated]:Sign-in failed. Please try again.",
+        "sign_in_success": "[to be translated]:Signed in to OpenAI Codex",
+        "signing_in": "[to be translated]:Waiting for browser…"
+      },
       "copilot": {
         "add_request_header": "Add header",
         "auth_failed": "Autenticación de Github Copilot fallida",
@@ -7026,6 +7067,15 @@
       },
       "filter_agent": "Proveedores compatibles con el agente de filtrado",
       "get_api_key": "Haga clic aquí para obtener la clave",
+      "grok_cli": {
+        "description": "[to be translated]:Sign in with your SuperGrok subscription",
+        "description_detail": "[to be translated]:This provider uses your xAI SuperGrok login (OAuth) to access Grok CLI models (Grok Build, Composer). Your browser will open to complete sign-in.",
+        "logged_in": "[to be translated]:Signed in to Grok CLI",
+        "sign_in_button": "[to be translated]:Sign in with xAI",
+        "sign_in_failed": "[to be translated]:Sign-in failed. Please try again.",
+        "sign_in_success": "[to be translated]:Signed in to Grok CLI",
+        "signing_in": "[to be translated]:Waiting for browser…"
+      },
       "logo_upload_failed": "Error al procesar la imagen seleccionada",
       "misc": "otro",
       "more_endpoints": {
@@ -7546,7 +7596,6 @@
     "openclaw": "OpenClaw",
     "paintings": "Pinturas",
     "settings": "Configuración",
-    "store": "Biblioteca de asistentes",
     "translate": "Traducir",
     "work": "Trabajo"
   },

@@ -1296,12 +1296,14 @@
       "add": "Προσθήκη ετικέτας",
       "delete": "Διαγραφή ετικέτας",
       "deleteConfirm": "Είστε βέβαιοι ότι θέλετε να διαγράψετε αυτήν την ετικέτα;",
+      "group_by": "[to be translated]:Group by tag",
       "manage": "Διαχείριση ετικετών",
       "modify": "Επεξεργασία ετικέτας",
       "none": "Δεν υπάρχουν προς το παρόν ετικέτες",
       "settings": {
         "title": "Ρυθμίσεις Ετικέτας"
       },
+      "ungroup": "[to be translated]:Turn off tag grouping",
       "untagged": "Αχαρακτήριστο"
     },
     "title": "Βοηθός",
@@ -1613,6 +1615,13 @@
       "top": "Επιστροφή στην κορυφή"
     },
     "resend": "Ξαναστείλε",
+    "resource_view": {
+      "menu": {
+        "agent": "[to be translated]:Agents",
+        "assistant": "[to be translated]:Assistants",
+        "skill": "[to be translated]:Skills"
+      }
+    },
     "save": {
       "file": {
         "title": "Αποθήκευση σε τοπικό αρχείο"
@@ -2309,6 +2318,14 @@
     "audio": "Ήχος",
     "batch_delete": "μαζική διαγραφή",
     "batch_operation": "Επιλογή όλων",
+    "cleanup": {
+      "confirm_content": "[to be translated]:Permanently delete auto-managed files that no chat or painting still references. Files you pinned to the library are kept.",
+      "confirm_ok": "[to be translated]:Clean up",
+      "confirm_title": "[to be translated]:Clean up unreferenced files?",
+      "done": "[to be translated]:Cleaned up {{count}} file(s)",
+      "failed": "[to be translated]:Cleanup failed",
+      "label": "[to be translated]:Clean up unreferenced files"
+    },
     "count": "Αριθμός αρχείων",
     "created_at": "Ημερομηνία δημιουργίας",
     "delete": {
@@ -2328,6 +2345,7 @@
       "no_match_description": "Κανένα αρχείο δεν ταιριάζει με τα τρέχοντα φίλτρα",
       "no_match_title": "Δεν βρέθηκαν αρχεία που να ταιριάζουν"
     },
+    "empty_trash": "[to be translated]:Empty trash",
     "error": {
       "delete_failed": "Αποτυχία διαγραφής αρχείων",
       "delete_partial_failed": "Μερικά αρχεία δεν μπόρεσαν να διαγραφούν",
@@ -2345,6 +2363,7 @@
     "missing": "Αγνοούμενος",
     "modified_at": "Τροποποιήθηκε στις",
     "name": "Όνομα αρχείου",
+    "no_actions": "[to be translated]:No actions available",
     "open": "Άνοιγμα",
     "other": "Άλλο",
     "permanent_delete": "Διαγραφή οριστικά",
@@ -2352,19 +2371,27 @@
       "description": "Αυτό θα διαγράψει μόνιμα {{count}} αρχείο(α). Η ενέργεια αυτή δεν μπορεί να αναιρεθεί.",
       "title": "Μόνιμη διαγραφή αρχείων;"
     },
+    "pin": "[to be translated]:Pin to library",
+    "pin_failed": "[to be translated]:Failed to update the file",
     "preview": {
       "error": "Αποτυχία ανοίγματος του αρχείου"
     },
     "remove_from_library": "Αφαίρεση από τη βιβλιοθήκη",
     "rename": "Μετονομασία",
     "restore": "Επαναφορά",
+    "select_all": "[to be translated]:Select visible files",
+    "select_all_short": "[to be translated]:Select All",
+    "select_file": "[to be translated]:Select {{name}}",
     "selected_count": "{{count}} αρχεία επιλέχθηκαν",
+    "selected_missing_hint": "[to be translated]:Some selected files are missing. Locate them or remove their records.",
     "show_in_folder": "Εμφάνιση στο φάκελο",
     "size": "Μέγεθος",
     "text": "Κείμενο",
     "title": "Αρχεία",
     "trash": "Σκουπίδια",
     "type": "Τύπος",
+    "unpin": "[to be translated]:Unpin from library",
+    "upload": "[to be translated]:Upload files",
     "video": "Βίντεο"
   },
   "globalSearch": {
@@ -2748,7 +2775,6 @@
     },
     "meta": {
       "data_sources_count": "{{count}} πηγές",
-      "documents_count": "{{count}} έγγραφα",
       "updated_at": "Ενημερώθηκε {{time}}"
     },
     "name_required": "Απαιτείται το όνομα της βάσης γνώσεων",
@@ -2908,7 +2934,8 @@
       "preview_description": "Επισκόπηση",
       "preview_prompt": "Προτροπή",
       "scroll_left": "Κύλιση κατηγοριών αριστερά",
-      "scroll_right": "Κύλιση κατηγοριών δεξιά"
+      "scroll_right": "Κύλιση κατηγοριών δεξιά",
+      "title": "[to be translated]:Assistant Library"
     },
     "badge": {
       "update": "Ενημέρωση"
@@ -4694,6 +4721,7 @@
     "github": "GitHub Models",
     "gpustack": "GPUStack",
     "grok": "Grok",
+    "grok-cli": "[to be translated]:Grok CLI",
     "groq": "Groq",
     "huggingface": "Hugging Face",
     "hunyuan": "Tencent Hunyuan",
@@ -4717,6 +4745,8 @@
     "ollama": "Ollama",
     "open-mineru": "Ανοιχτό MinerU",
     "openai": "OpenAI",
+    "openai-codex": "[to be translated]:OpenAI Codex",
+    "opencode": "[to be translated]:OpenCode Go",
     "openrouter": "OpenRouter",
     "ovms": "Intel OVMS",
     "ovocr": "Intel OV(NPU) OCR",
@@ -6794,6 +6824,7 @@
         "reorderFailed": "Αποτυχία αναδιάταξης προτροπών",
         "updateFailed": "Αποτυχία ενημέρωσης προτροπής"
       },
+      "manage": "[to be translated]:Manage Prompts",
       "title": "Διαχείριση Prompts",
       "titleLabel": "Τίτλος",
       "titlePlaceholder": "Εισαγάγετε τίτλο prompt",
@@ -6952,6 +6983,16 @@
         "open_terminal": "[to be translated]:Open terminal to sign in",
         "recheck": "[to be translated]:Recheck"
       },
+      "codex": {
+        "account": "[to be translated]:Account: {{accountId}}",
+        "description": "[to be translated]:Sign in with your ChatGPT subscription",
+        "description_detail": "[to be translated]:This provider uses your ChatGPT Plus/Pro login (OAuth) to access OpenAI Codex models. Your browser will open to complete sign-in.",
+        "logged_in": "[to be translated]:Signed in to OpenAI Codex",
+        "sign_in_button": "[to be translated]:Sign in with ChatGPT",
+        "sign_in_failed": "[to be translated]:Sign-in failed. Please try again.",
+        "sign_in_success": "[to be translated]:Signed in to OpenAI Codex",
+        "signing_in": "[to be translated]:Waiting for browser…"
+      },
       "copilot": {
         "add_request_header": "Add header",
         "auth_failed": "Η επιβεβαίωση του Github Copilot απέτυχε",
@@ -7026,6 +7067,15 @@
       },
       "filter_agent": "Υποστηριζόμενοι Πάροχοι του Φίλτρου Πράκτορα",
       "get_api_key": "Κάντε κλικ εδώ για να πάρετε κλειδί",
+      "grok_cli": {
+        "description": "[to be translated]:Sign in with your SuperGrok subscription",
+        "description_detail": "[to be translated]:This provider uses your xAI SuperGrok login (OAuth) to access Grok CLI models (Grok Build, Composer). Your browser will open to complete sign-in.",
+        "logged_in": "[to be translated]:Signed in to Grok CLI",
+        "sign_in_button": "[to be translated]:Sign in with xAI",
+        "sign_in_failed": "[to be translated]:Sign-in failed. Please try again.",
+        "sign_in_success": "[to be translated]:Signed in to Grok CLI",
+        "signing_in": "[to be translated]:Waiting for browser…"
+      },
       "logo_upload_failed": "Αποτυχία επεξεργασίας της επιλεγμένης εικόνας",
       "misc": "Άλλο",
       "more_endpoints": {
@@ -7546,7 +7596,6 @@
     "openclaw": "OpenClaw",
     "paintings": "Ζωγραφική",
     "settings": "Ρυθμίσεις",
-    "store": "Βιβλιοθήκη βοηθών",
     "translate": "Μετάφραση",
     "work": "Εργασία"
   },

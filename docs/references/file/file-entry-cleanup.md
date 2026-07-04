@@ -40,7 +40,7 @@ For some files, zero refs is nevertheless the correct end state: a user-visible 
 - Do not add SQL triggers or an event/outbox queue (see [§10](#10-rejected-designs)).
 - Do not add per-business `onSourceDeleted` hooks to `FileRefService`.
 - Do not make `FileRefService` own persistent relationship writes; source domains still own their association tables.
-- Do not ship the FilesPage "pin / save to library" **button** in this scope (the flip endpoint ships; the UI is a follow-up).
+- The FilesPage "pin / save to library" toggle and the "clean up unreferenced files" drain action both ship (a later review round wired the flip endpoint and the confirmed-drain escape valve to the Files page).
 
 ## 4. Business Intent: `cleanup_policy`
 
@@ -74,7 +74,7 @@ Files that follow an owning business object's lifecycle are `delete_when_unrefer
 ### 4.2 Policy transitions
 
 - **`ensureExternalEntry` reuse branch — upgrade-only**: when upserting hits an existing row, the call may upgrade `delete_when_unreferenced` → `manual` (caller passes manual intent) but must never downgrade `manual` → `delete_when_unreferenced`. A library file that gets `@`-mentioned in a chat must not silently become a cleanup candidate.
-- **Explicit flip**: `PATCH /files/entries/:id` (DataApi, body `{ cleanupPolicy }`) exposes the flip — it is the one FileEntry mutation with no FS side effect, so it lives on DataApi as a pure SQL column update; every other entry write stays on File IPC. Explicit user/caller action may set either direction. This backs the future FilesPage "pin / save to library" action.
+- **Explicit flip**: `PATCH /files/entries/:id` (DataApi, body `{ cleanupPolicy }`) exposes the flip — it is the one FileEntry mutation with no FS side effect, so it lives on DataApi as a pure SQL column update; every other entry write stays on File IPC. Explicit user/caller action may set either direction. It backs the FilesPage "pin / unpin" per-file toggle.
 - `cleanup_policy` applies to **both origins**. Deleting an external entry is DB-only (the user's file is never touched), per existing `permanentDelete` semantics.
 
 ### 4.3 Renderer visibility
@@ -121,8 +121,8 @@ Same philosophy as the FS sweep's abort (`file-manager-architecture.md` §10.4),
 
 Unlike the FS sweep — where half the disk suddenly lacking DB rows is almost certainly an upstream bug — this guard has a **legitimate trigger**: a user clearing most of their chats at once can push the candidate fraction past 50%, and since neither the numerator nor the denominator then moves, a bare abort would latch forever. The abort therefore must not be a dead end:
 
-- `runSweep()`'s report includes the pending auto-reclaim count so the cleanup UI can surface "N files pending cleanup".
-- An explicitly user-confirmed cleanup invocation (`confirmed` flag on the sweep/cleanup IPC surface) bypasses the fraction check; the per-candidate re-verification (§5.4) and batch limit still apply in full. The user already expressed deletion intent once (deleting the business objects) — this second confirmation is required only in the >50% tail.
+- `runSweep()`'s report includes the pending auto-reclaim count (`counts.entryCleanup`) so the cleanup UI can surface "N files pending cleanup".
+- An explicitly user-confirmed cleanup invocation (`confirmed` flag on the sweep/cleanup IPC surface) bypasses the fraction check; the per-candidate re-verification (§5.4) and batch limit still apply in full. The user already expressed deletion intent once (deleting the business objects) — this second confirmation is required only in the >50% tail. This is reachable today: the FilesPage toolbar's "clean up unreferenced files" action calls `runSweep({ confirmed: true })` behind a confirm dialog, so a latched abort is never a dead end for the user.
 - Automatic passes keep re-evaluating every interval; once a confirmed drain (or library growth) brings the fraction back under threshold, automatic reclamation resumes on its own.
 
 The fraction threshold is thus the guard against *classification* bugs (migration mis-tagging, policy mis-assignment); the *coverage* bug class (a ref table missing from the anti-join) is handled structurally by registry-driven query generation (§5.1).

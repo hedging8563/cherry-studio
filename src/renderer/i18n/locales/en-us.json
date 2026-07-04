@@ -2319,6 +2319,14 @@
     "audio": "Audio",
     "batch_delete": "Batch delete",
     "batch_operation": "Select All",
+    "cleanup": {
+      "confirm_content": "Permanently delete auto-managed files that no chat or painting still references. Files you pinned to the library are kept.",
+      "confirm_ok": "Clean up",
+      "confirm_title": "Clean up unreferenced files?",
+      "done": "Cleaned up {{count}} file(s)",
+      "failed": "Cleanup failed",
+      "label": "Clean up unreferenced files"
+    },
     "count": "files",
     "created_at": "Created At",
     "delete": {
@@ -2364,6 +2372,8 @@
       "description": "This will permanently remove {{count}} file(s). This action cannot be undone.",
       "title": "Permanently delete files?"
     },
+    "pin": "Pin to library",
+    "pin_failed": "Failed to update the file",
     "preview": {
       "error": "Failed to open file"
     },
@@ -2381,6 +2391,7 @@
     "title": "Files",
     "trash": "Trash",
     "type": "Type",
+    "unpin": "Unpin from library",
     "upload": "Upload files",
     "video": "Video"
   },

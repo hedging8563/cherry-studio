@@ -78,7 +78,8 @@ export async function runEntryCleanup(
     }
 
     // Safety threshold (spec §5.3): guards classification bugs; a legitimate
-    // mass-delete unblocks via the user-confirmed drain.
+    // mass-delete unblocks via the user-confirmed drain (the FilesPage
+    // "clean up unreferenced files" action → runSweep({ confirmed: true })).
     if (!confirmed && candidates >= ABORT_MIN_CANDIDATES && candidates > totalEntries * ABORT_FRACTION) {
       return finish({
         outcome: 'aborted',
