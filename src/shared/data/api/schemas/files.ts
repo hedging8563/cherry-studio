@@ -1,7 +1,9 @@
 /**
- * File API Schema definitions (read-only DataApi)
+ * File API Schema definitions
  *
- * DataApi is a SQL-first read surface for file data. Handlers:
+ * DataApi is a SQL-first surface for file data: all reads, plus the single
+ * side-effect-free mutation (`PATCH /files/entries/:id` — `cleanupPolicy`
+ * only). Handlers:
  *
  * - MUST NOT read or `stat` the filesystem
  * - MUST NOT call main-side resolvers (`resolvePhysicalPath`, etc.)
@@ -17,6 +19,7 @@
  * Endpoints:
  * - `GET /files/entries`            — FileEntry list (fixed shape)
  * - `GET /files/entries/:id`        — Single entry lookup (fixed shape)
+ * - `PATCH /files/entries/:id`      — Narrow entry update (`cleanupPolicy` only — no FS side effects)
  * - `GET /files/entries/stats`      — Pure-SQL aggregate counts for sidebar filters
  * - `GET /files/entries/ref-counts` — Ref-count aggregation for a batch of ids (persistent SQL refs + temp-session cache refs)
  * - `GET /files/entries/:id/refs`   — File references for a specific entry
@@ -51,7 +54,12 @@
 
 import type { CursorPaginationParams, CursorPaginationResponse } from '@shared/data/api/apiTypes'
 import type { FileEntry, FileEntryId, FileRef } from '@shared/data/types/file'
-import { FileEntryIdSchema, FileEntryOriginSchema, FileRefSourceTypeSchema } from '@shared/data/types/file'
+import {
+  CleanupPolicySchema,
+  FileEntryIdSchema,
+  FileEntryOriginSchema,
+  FileRefSourceTypeSchema
+} from '@shared/data/types/file'
 import * as z from 'zod'
 
 /**
@@ -124,6 +132,16 @@ export const RefsBySourceQuerySchema = z.strictObject({
 export type RefsBySourceQueryParams = z.input<typeof RefsBySourceQuerySchema>
 export type RefsBySourceQuery = z.output<typeof RefsBySourceQuerySchema>
 
+/**
+ * Entry PATCH body. Deliberately narrow: `cleanupPolicy` is the only
+ * DataApi-patchable field — a pure SQL column update with no FS side effects.
+ * Fields whose writes touch the filesystem (rename, trash, …) stay on File IPC.
+ */
+export const UpdateFileEntrySchema = z.strictObject({
+  cleanupPolicy: CleanupPolicySchema
+})
+export type UpdateFileEntryDto = z.infer<typeof UpdateFileEntrySchema>
+
 export type FileSchemas = {
   // ─── Entry Queries (pure SQL, fixed shape) ───
 
@@ -168,13 +186,25 @@ export type FileSchemas = {
   }
 
   /**
-   * Individual entry query. Fixed shape.
+   * Individual entry query + narrow update. Fixed shape.
+   *
+   * PATCH flips `cleanupPolicy` in both directions (file-entry-cleanup.md
+   * §4.2) — it backs the future FilesPage "pin to library" action. The body
+   * schema (`UpdateFileEntrySchema`) allows nothing else: this is the one
+   * FileEntry mutation with no FS side effect, so it lives on DataApi while
+   * every other entry write stays on File IPC.
    *
    * @example GET /files/entries/abc123
+   * @example PATCH /files/entries/abc123 { "cleanupPolicy": "manual" }
    */
   '/files/entries/:id': {
     GET: {
       params: { id: FileEntryId }
+      response: FileEntry
+    }
+    PATCH: {
+      params: { id: FileEntryId }
+      body: UpdateFileEntryDto
       response: FileEntry
     }
   }

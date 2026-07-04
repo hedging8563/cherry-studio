@@ -134,9 +134,9 @@ import { fileRefService } from '@data/services/FileRefService'
 import { loggerService } from '@logger'
 import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@main/core/lifecycle'
 import { remove as fsRemove, stat as fsStat } from '@main/utils/file/fs'
-import type { CleanupPolicy, DanglingState, FileEntry, FileEntryId } from '@shared/data/types/file'
+import type { DanglingState, FileEntry, FileEntryId } from '@shared/data/types/file'
 import { AbsolutePathSchema, CleanupPolicySchema, FileEntryIdSchema } from '@shared/data/types/file'
-import { SafeNameSchema } from '@shared/data/types/file/essential'
+import { createInternalEntryInputSchema } from '@shared/ipc/schemas/file'
 import { IpcChannel } from '@shared/IpcChannel'
 import type {
   BatchCreateResult,
@@ -147,7 +147,6 @@ import type {
   FileUrlString,
   PhysicalFileMetadata
 } from '@shared/types/file'
-import { SafeExtSchema } from '@shared/types/file/common'
 import type { FileHandle } from '@shared/types/file/handle'
 import { FileHandleSchema } from '@shared/types/file/handle'
 import mime from 'mime'
@@ -232,25 +231,10 @@ export type EnsureExternalEntryParams = EnsureExternalEntryIpcParams
 // Phase 2 schemas — reuse the canonical essential.ts validators so the IPC
 // boundary is the gate (path-traversal / null bytes / whitespace-only names
 // rejected here, before downstream factories see them).
-const SafeExtNullableSchema = SafeExtSchema.nullable()
-
-export const CreateInternalEntryIpcSchema = z.discriminatedUnion('source', [
-  z.strictObject({ source: z.literal('path'), path: AbsolutePathSchema, cleanupPolicy: CleanupPolicySchema }),
-  z.strictObject({ source: z.literal('url'), url: z.url(), cleanupPolicy: CleanupPolicySchema }),
-  z.strictObject({
-    source: z.literal('base64'),
-    data: z.string().min(1),
-    name: SafeNameSchema.optional(),
-    cleanupPolicy: CleanupPolicySchema
-  }),
-  z.strictObject({
-    source: z.literal('bytes'),
-    data: z.instanceof(Uint8Array),
-    name: SafeNameSchema,
-    ext: SafeExtNullableSchema,
-    cleanupPolicy: CleanupPolicySchema
-  })
-])
+//
+// The create-entry union is shared with the IpcApi batch route — single
+// source of truth in `@shared/ipc/schemas/file`.
+export const CreateInternalEntryIpcSchema = createInternalEntryInputSchema
 
 export const EnsureExternalEntryIpcSchema = z.strictObject({
   externalPath: AbsolutePathSchema,
@@ -262,11 +246,6 @@ export const GetPhysicalPathIpcSchema = z.strictObject({ id: FileEntryIdSchema }
 export const PermanentDeleteIpcSchema = FileHandleSchema
 
 export const RunSweepIpcSchema = z.strictObject({ confirmed: z.boolean().optional() })
-
-export const SetCleanupPolicyIpcSchema = z.strictObject({
-  id: FileEntryIdSchema,
-  cleanupPolicy: CleanupPolicySchema
-})
 
 // ─── Version types ───
 
@@ -709,15 +688,6 @@ export class FileManager extends BaseService implements IFileManager {
   }
 
   /**
-   * Explicit policy flip (spec §4.2) — both directions allowed; this backs the
-   * future FilesPage "pin to library" action. File-entry mutations live on
-   * File IPC, not DataApi (files.ts handler header).
-   */
-  async setCleanupPolicy(id: FileEntryId, cleanupPolicy: CleanupPolicy): Promise<FileEntry> {
-    return this.deps.fileEntryService.update(id, { cleanupPolicy })
-  }
-
-  /**
    * Debounced nudge for business delete flows — pure latency optimization
    * (spec §5.5); the idle-gated interval is the reliability mechanism.
    * Ungated: it fires right after a user-initiated delete.
@@ -790,10 +760,6 @@ export class FileManager extends BaseService implements IFileManager {
     this.ipcHandle(IpcChannel.File_RunSweep, async (_e, params: unknown) =>
       this.runSweep(RunSweepIpcSchema.parse(params ?? {}))
     )
-    this.ipcHandle(IpcChannel.File_SetCleanupPolicy, async (_e, params: unknown) => {
-      const p = SetCleanupPolicyIpcSchema.parse(params)
-      return this.setCleanupPolicy(p.id, p.cleanupPolicy)
-    })
   }
 
   /**

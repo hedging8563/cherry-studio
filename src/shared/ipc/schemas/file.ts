@@ -34,6 +34,11 @@ const batchCreateResultSchema = z.strictObject({
   failed: z.array(z.strictObject({ sourceRef: z.string(), error: z.string() }))
 })
 
+// Fields common to every create-entry source. `cleanupPolicy` is required at
+// all creation surfaces (file-entry-cleanup.md §4.1) — written once here, not
+// per union branch. `.extend()` keeps the branches strict.
+const createInternalEntryBaseSchema = z.strictObject({ cleanupPolicy: CleanupPolicySchema })
+
 // TODO(file-ipc): Unify these schemas with the branded transport types in
 // `src/shared/types/file/ipc.ts`. `FilePath`, `Base64String`, and `UrlString` are
 // TS-only aliases while their runtime schemas live elsewhere, so a successful
@@ -41,21 +46,22 @@ const batchCreateResultSchema = z.strictObject({
 // cast in the handler. Keeping the type and schema definitions separate risks
 // future drift; refactor them to share one source of truth before migrating the
 // remaining File IPC surface.
-const createInternalEntryInputSchema = z.discriminatedUnion('source', [
-  z.strictObject({ source: z.literal('path'), path: AbsolutePathSchema, cleanupPolicy: CleanupPolicySchema }),
-  z.strictObject({ source: z.literal('url'), url: z.url(), cleanupPolicy: CleanupPolicySchema }),
-  z.strictObject({
+//
+// Exported: the legacy single-create channel (`File_CreateInternalEntry`,
+// registered in FileManager) parses with this same schema — one source of truth.
+export const createInternalEntryInputSchema = z.discriminatedUnion('source', [
+  createInternalEntryBaseSchema.extend({ source: z.literal('path'), path: AbsolutePathSchema }),
+  createInternalEntryBaseSchema.extend({ source: z.literal('url'), url: z.url() }),
+  createInternalEntryBaseSchema.extend({
     source: z.literal('base64'),
     data: z.string().min(1),
-    name: SafeNameSchema.optional(),
-    cleanupPolicy: CleanupPolicySchema
+    name: SafeNameSchema.optional()
   }),
-  z.strictObject({
+  createInternalEntryBaseSchema.extend({
     source: z.literal('bytes'),
     data: z.instanceof(Uint8Array),
     name: SafeNameSchema,
-    ext: SafeExtSchema.nullable(),
-    cleanupPolicy: CleanupPolicySchema
+    ext: SafeExtSchema.nullable()
   })
 ])
 

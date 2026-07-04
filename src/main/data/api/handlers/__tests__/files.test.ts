@@ -174,6 +174,60 @@ describe('fileHandlers (DataApi)', () => {
     })
   })
 
+  describe('PATCH /files/entries/:id', () => {
+    it('flips cleanupPolicy in both directions (spec §4.2 explicit flip)', async () => {
+      const id = '019606a0-0000-7000-8000-000000000b10'
+      await seedEntry(id, { cleanupPolicy: 'manual' })
+
+      const toAuto = (await fileHandlers['/files/entries/:id'].PATCH({
+        params: { id: id as FileEntryId },
+        body: { cleanupPolicy: 'delete_when_unreferenced' }
+      } as never)) as { cleanupPolicy: string }
+      expect(toAuto.cleanupPolicy).toBe('delete_when_unreferenced')
+
+      const toManual = (await fileHandlers['/files/entries/:id'].PATCH({
+        params: { id: id as FileEntryId },
+        body: { cleanupPolicy: 'manual' }
+      } as never)) as { cleanupPolicy: string }
+      expect(toManual.cleanupPolicy).toBe('manual')
+    })
+
+    it('rejects an invalid policy value with ZodError at the boundary', async () => {
+      const id = '019606a0-0000-7000-8000-000000000b11'
+      await seedEntry(id)
+      await expect(
+        fileHandlers['/files/entries/:id'].PATCH({
+          params: { id: id as FileEntryId },
+          body: { cleanupPolicy: 'not-a-policy' }
+        } as never)
+      ).rejects.toHaveProperty('name', 'ZodError')
+    })
+
+    it('rejects any field other than cleanupPolicy (strict body)', async () => {
+      const id = '019606a0-0000-7000-8000-000000000b12'
+      await seedEntry(id)
+      await expect(
+        fileHandlers['/files/entries/:id'].PATCH({
+          params: { id: id as FileEntryId },
+          body: { cleanupPolicy: 'manual', name: 'sneaky-rename' }
+        } as never)
+      ).rejects.toHaveProperty('name', 'ZodError')
+    })
+
+    it('throws DataApiError(NOT_FOUND) when the id does not exist', async () => {
+      const missing = '019606a0-0000-7000-8000-0000000000fe' as FileEntryId
+      const promise = fileHandlers['/files/entries/:id'].PATCH({
+        params: { id: missing },
+        body: { cleanupPolicy: 'manual' }
+      } as never)
+      await expect(promise).rejects.toBeInstanceOf(DataApiError)
+      await expect(promise).rejects.toMatchObject({
+        code: ErrorCode.NOT_FOUND,
+        details: { resource: 'FileEntry', id: missing }
+      })
+    })
+  })
+
   describe('GET /files/entries/ref-counts', () => {
     it('returns refCount=0 for ids with no refs and counts existing refs', async () => {
       const idA = '019606a0-0000-7000-8000-000000000c01' as FileEntryId
