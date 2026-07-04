@@ -1,6 +1,6 @@
 # 模块化备份 Contributor 架构设计 — Final Review
 
-> **TL;DR**: 把 backup 的集中式规则散落（`DomainRegistry`/`DomainStripper`/`DomainImporter`/`FileCollector`）拆为各业务域声明式的 `BackupContributor`，引入**聚合边界（AggregateBoundary）**让冲突策略按完整对象边界静态可校验地传播；恢复走整库 DB pre-snapshot（`VACUUM INTO`）+ 文件快照 + `withWriteTx` 分层执行（文件 IO 事务外、DB 导入事务内，符合 V2 `withWriteTx` 哲学）。
+> **TL;DR**: 把 backup 的集中式规则散落（`DomainRegistry`/`DomainStripper`/`DomainImporter`/`FileCollector`）拆为各业务域声明式的 `BackupContributor`，引入**聚合边界（AggregateBoundary）**让冲突策略按完整对象边界静态可校验地传播；恢复走整库 DB pre-snapshot（`VACUUM INTO`）+ 文件快照 + **detached 写事务**分层执行（文件 IO 事务外、DB 导入事务内，符合 V2 `withWriteTx` 哲学；但 D 模型 import target = detached `work.sqlite`，事务 over detached handle，**非** live `DbService.withWriteTx`）。
 
 ---
 
@@ -75,7 +75,7 @@ flowchart LR
   subgraph S3[恢复消费]
     C1[读 manifest 定范围] --> C2[建 RestoreRecoveryPoint]
     C2 --> C3[聚合边界冲突策略]
-    C3 --> C4[导入 rows defer FK 走 withWriteTx]
+    C3 --> C4[导入 rows defer FK 走 detached 写事务]
     C4 --> C5[FTS 重建与一致性检查]
     C5 --> C6[结果页与撤销入口]
   end
@@ -107,7 +107,7 @@ flowchart LR
 |---|---|---|
 | Entity facts（schema） | 表归属、引用事实、主键形态、聚合边界、file-ref source、JSON 软引用 | SET_NULL/DELETE_ROW 动作、导入顺序、恢复策略 |
 | Backup policy | 省略引用 override、唯一键合并 | 数据库 I/O、文件操作、异步 hook（remap/idStrategies 已移除） |
-| Operations | 文件资源发现、beforeArchive、逐行 transform、afterImport（in-tx FTS 重建）、afterCommit（post-tx cache reload / schedule re-arm）、blob 恢复、cloneAggregate | 可用纯数据表达的事实和策略 |
+| Operations | 文件资源发现、beforeArchive、逐行 transform、afterImport（FTS 重建 in detached work.sqlite）、blob 恢复、cloneAggregate | 可用纯数据表达的事实和策略 |
 
 > [!IMPORTANT]
 > **核心机制是 `schema.aggregates`（聚合边界）**，把 object-boundary SKIP/OVERWRITE/RENAME 从文字描述提升为静态可校验机制。
@@ -123,7 +123,7 @@ flowchart TB
   CM --> BR[BackupRegistry]
   BR --> EX[ExportOrchestrator]
   BR --> IM[ImportOrchestrator]
-  IM --> RS[RestoreSafetyManager]
+  IM --> PG[preboot promotion gate]
 ```
 
 测试四类：tsc + codegen check、coverage、equivalence、restore tests（聚合冲突 + pre-snapshot 回滚 + identity propagation：DB owning FK 与 required JSON ref → natural-key target；多态软引用 pin/entity_tag 的 selected-domain 过滤与 RENAME case）。
@@ -180,7 +180,7 @@ flowchart TB
 | 域类型 | 聚合边界注意点 |
 |---|---|
 | ASSISTANTS | RENAME 克隆时成员 assistantId 重映射到新根 PK |
-| AGENTS | agent_workspace/agent_channel 单表 renamable:false；agent_channel_task 是 junction（双 cascade FK）；**job_schedule.type='agent.task' row-scope 归 AGENTS**（natural-key `(type,name)`、FIELD_MERGE；Agent task 定义，否则设计性丢失用户 task）；job_schedule 按 `(type,name)` 合并时 `agent_channel_task.taskId`（→schedule id）须 identity propagation 重写到本地 canonical schedule id（§5.4）；afterCommit 须 re-arm job_schedule timer（DB 导入不调 registerJobSchedule，且 re-arm 须读 commit 后的最终 schedule 行集，故属 post-tx `afterCommit` 而非 in-tx `afterImport`，见 §7） |
+| AGENTS | agent_workspace/agent_channel 单表 renamable:false；agent_channel_task 是 junction（双 cascade FK）；**job_schedule.type='agent.task' row-scope 归 AGENTS**（natural-key `(type,name)`、FIELD_MERGE；Agent task 定义，否则设计性丢失用户 task）；job_schedule 按 `(type,name)` 合并时 `agent_channel_task.taskId`（→schedule id）须 identity propagation 重写到本地 canonical schedule id（§5.4）；re-arm 由 preboot promotion 后重启、JobManager startup recovery 自然完成（D 模型不做热恢复，见 §9） |
 | FILE_STORAGE | restoreResources() 先于 DB 行导入，返回 skippedFileEntryIds；renamable:false，RENAME 退化为 SKIP |
 | PROVIDERS | 聚合 user_provider + user_model(providerId)；natural-key，默认 FIELD_MERGE（apiKeys/authConfig 列级合并，防丢 API key）；renamable:false（user_model.id 派生键） |
 
@@ -305,15 +305,15 @@ flowchart TB
 
 各 hook 调用时机与缺省：collectFileResources（导出前收集文件/缺省空集）、beforeArchive（剥离后仅改备份副本/no-op）、transformRow（导入前/原行，返回 null 跳过该行）、restoreResources（DB 导入前事务外/无）、cloneAggregate（仅 renamable 聚合 RENAME/缺则 finalize 拒）。**聚合根被 SKIP 时其成员 transformRow 不调用**。
 
-**恢复期 hook 分两阶段**（in-tx vs post-tx 边界严格分离，符合 §9「withWriteTx fn 内仅 DB ops」约束）：
-- **`afterImport`（in-tx，commit 前）**：在写事务**内**、commit **之前**执行，只允许依赖已写入 DB 行的派生操作——主要是 **FTS 重建**（TOPICS 调 `rebuildMessageFts`、AGENTS 调 `rebuildSessionMessageFts`，复用 in-tx 已导入行、重建 FTS5 content table，使其与业务行在同一事务内一致提交）。
-- **`afterCommit`（post-tx，commit/rollback 之后）**：在写事务**外**、commit/rollback **之后**执行，只允许读已落盘的最终 DB 状态或触达进程内 cache/scheduler——**PREFERENCES** 调 `PreferenceService.reloadFromDb()+rebroadcast`（reloadFromDb 须读已 commit 的偏好使 main + 各 renderer cache 失效重载，事务回滚时则不重载）；**AGENTS** 调 `rearmSchedulesAfterImport`（重新 arm `job_schedule(type='agent.task')` timer，DB 导入不调 registerJobSchedule，否则 task 不 fire 直到重启）。两者都依赖 commit 后的持久状态（cache 重载须读最终值、schedule 须基于最终行集），故不可在 in-tx 阶段运行（回滚会导致 reload/arm 与已回滚 DB 不一致）。
+**恢复期 hook 分两阶段**（in-tx vs post-tx 边界严格分离，符合 §9「detached 写事务 fn 内仅 DB ops」约束 —— 事务 over detached `work.sqlite` handle，**非** live `DbService.withWriteTx`）：
+- **`afterImport`（in detached work.sqlite，commit 前）**：在 detached 写事务**内**、commit **之前**执行，只允许依赖已写入 work.sqlite 行的派生操作——主要是 **FTS 重建**（TOPICS 调 `rebuildMessageFts`、AGENTS 调 `rebuildSessionMessageFts`，复用 in-tx 已导入行、重建 FTS5 content table，使其与业务行在同一事务内一致提交）。这是 importer 责任（§9），在 work.sqlite offline 完成，非 live。
+- **（D 模型无 `afterCommit`）**：live DB 永不进程内写，detached work.sqlite 不持运行时 cache；旧 post-tx 职责（PREFERENCES cache reload / AGENTS `job_schedule` timer re-arm）由 preboot promotion 后**重启**自然完成——PREFERENCES cache 由 `PreferenceService.onInit` fresh load，AGENTS timer 由 `JobManager` startup recovery re-arm。故不再需要 `reloadFromDb` / `rearmSchedulesAfterImport` / `afterCommit` hook。
 
 > [!IMPORTANT]
 > **Contributor placement / ownership**：各 contributor declaration **co-locate 在该域 owning module 的实际位置**（遵守 main-process 现有目录边界）。实际约定是 **data 层 flat**——14 个 contributor 均在 `src/main/data/services/backupContributor-<domain>.ts`（如 `backupContributor-topics` / `-providers` / `-knowledge` / `-agents`，唯一文件名）；数据声明归数据层，避免 backup→业务模块逆向依赖。例外：`src/main/data/backupContributor-preferences.ts`（上一级）、`src/main/services/translate/backupContributor.ts`（TRANSLATE_HISTORY co-locate 业务模块）。`features/knowledge/` / `ai/` 等业务模块路径仅作非强制 co-location 举例（早期设想，现未采用）。contributor-consumed 的纯类型 / context 类型 / runtime helper / codegen 产物 / 枚举归 **process-local neutral layer** `@main/data/db/backup/`（data/schema-owned，main-only：`contributor-types` / `contexts` / `freeze` / `dbSchemaRefs` / `domains[BackupDomain+ConflictStrategy]`），业务域 + backup service **同向** import——避免 data 域 contributor → services/backup 逆向依赖、shared 层不扩大（codegen 产物 / main-only 枚举不放 shared）。backup 模块（`src/main/services/backup/`）只持统一 barrel（聚合 14 域导出）+ registry + finalize + orchestrator，**不承载 domain-specific facts**，也不持 contributor-consumed 类型/helper（归 neutral layer）。
 
 > [!TIP]
-> **lifecycle 边界**：`ContributorManager` 定位为 **non-lifecycle named singleton**（`export const contributorManager = new ContributorManager()`），**不**进 `serviceRegistry.ts`、不加 `@ServicePhase`——它不持有长生命周期资源、不连 DB、无 IPC/定时器/事件订阅，只有"启动期一次性 finalize 产出冻结 BackupRegistry"的纯函数式行为（对齐 CLAUDE.md Non-Lifecycle Services 决策指南）。finalize 由 `BackupService.onInit()` 调 `getRegistry()` **惰性触发**：失败抛 `ContributorFinalizeError` → BackupService.onInit 失败 → lifecycle 容器拒绝启动（启动期校验语义保留）。`BackupService` 仍是 WhenReady（持 orchestrator/RESTORE BARRIER/journal 等长生命周期资源）；finalize 只校验静态一致性、**不连 DB**（DB 覆盖由 coverage test 保证，避免 WhenReady 服务违规依赖 DbService）。
+> **lifecycle 边界**：`ContributorManager` 定位为 **non-lifecycle named singleton**（`export const contributorManager = new ContributorManager()`），**不**进 `serviceRegistry.ts`、不加 `@ServicePhase`——它不持有长生命周期资源、不连 DB、无 IPC/定时器/事件订阅，只有"启动期一次性 finalize 产出冻结 BackupRegistry"的纯函数式行为（对齐 CLAUDE.md Non-Lifecycle Services 决策指南）。finalize 由 `BackupService.onInit()` 调 `getRegistry()` **惰性触发**：失败抛 `ContributorFinalizeError` → BackupService.onInit 失败 → lifecycle 容器拒绝启动（启动期校验语义保留）。`BackupService` 仍是 WhenReady（持 orchestrator / write quiesce 编排 / journal / relaunch 触发等长生命周期资源；preboot promotion gate 是 db module 导出纯函数，不经 BackupService）；finalize 只校验静态一致性、**不连 DB**（DB 覆盖由 coverage test 保证，避免 WhenReady 服务违规依赖 DbService）。
 
 ### 8. 架构检查清单
 
@@ -369,11 +369,16 @@ flowchart TB
 - 不变量 14/15 派生自 owning references（§6.2 `AggregateBoundary` 派生公式）
 - DB_FTS_VIRTUAL_TABLES 由 #2/#4 覆盖（**无独立 FTS 不变量**）：contentTable（value，如 message）∈ DB_TABLES 由 #2 校验 owner、FTS 虚表（key，如 message_fts）∈ ALWAYS_STRIP 由 #4 校验排除——避免与 #2/#4 冗余的新增不变量
 
-### 9. 恢复前快照与撤销恢复（恢复编排层）
+### 9. 恢复编排：Detached Merge + Preboot Promotion（对齐 fullex #16714）
 
-当前文件级回滚只覆盖 FILE_STORAGE 覆盖写入，不覆盖 DB 行导入中途失败，也不覆盖 API key / 偏好 / provider / assistant / agent / 聊天记录等 SQLite 数据。补恢复编排层 RestoreRecoveryPoint：整库 DB pre-snapshot + restore journal + 受影响文件快照（同 restoreId）。**执行分层严格分离**（符合 V2 withWriteTx「fn 内仅 DB ops、不做文件 IO」约束）：
+> [!NOTE]
+> **本节为 D 模型 target-state（C-import 阶段实现）**，描述 restore 的**目标架构**。当前 codebase 是 **pre-D-model**：`DbService` 无 `createSnapshot`/`applyMigrations`、`src/main/index.ts` 无 preboot promotion gate、`WindowManager` 无 restore 窗口阻塞、`DataApi`/`Preference` IPC handler 无 restore gate、`src/main/data/db/backup/contexts.ts` 类型 pre-D-model。这些在 **C-import 阶段**（等 upstream `createSnapshot`/`applyMigrations`/preboot gate 合 main）实现。故本节与现有代码的差异是**预期的目标 vs 现状**，非疏漏——reviewer 勿按「spec 须描述现状」判。已实现：contributor 栈（4 PR：schema refs + 14 contributors + ContributorManager + BackupService 骨架）；operations hook 的 runtime 实现（afterImport / restoreResources / write quiesce / 窗口阻塞 / preboot gate 接入）属 C-import。
 
-0. **manifest 版本门禁**（恢复第一步，先于 RESTORE BARRIER；只读/操作备份文件、**不碰 live DB**）：
+restore 走 **D 模型**（detached merge + preboot promotion，对齐 fullex #16714）：**永不进程内触碰 live DB** —— 运行时在 detached `work.sqlite` 副本上合并，preboot 原子 rename promotion。live DB 只在 preboot 零连接窗口被 rename 替换，结构性消除 half-restored / WAL sidecar replay / runtime rollback 整类风险。合并语义（SKIP / FIELD_MERGE / only-add + 聚合冲突 + identity propagation）全保留，仅 import target 从 live 改为 detached work.sqlite。
+
+**运行时（UI 阻塞）**：
+
+0. **manifest 版本门禁**（恢复第一步，只读归档、**不碰 live DB**）：
 
    - **格式校验**：`backupFormatVersion` major bump = 不兼容 → 拒绝 + 明确错误
    - **schema 比对**（以 `schemaMigrationId` 的 `when`(folderMillis) 为权威序，**非 tag 词典序**——drizzle migrate 按 folderMillis 决定增量），三种状态：
@@ -382,23 +387,45 @@ flowchart TB
      - **等同** → 直接导入
    - **失败善后**：migrate-forward 失败（备份损坏 / migration SQL 执行失败）= 门禁失败，中止恢复、保留 live DB 原状（未触碰）、删临时 `backup.sqlite`，**不触发 step 4 整库回滚**（因 live DB 未变），并向用户报错「备份无法恢复：文件损坏或版本不受支持」
    - migrate-forward 跑 release migration chain（`resources/database/drizzle` 正式产物，#16626 起路径），不碰开发期 drift；跨分支表集差异（`agent_task` vs `painting`/`agent_workspace`，§四）由 chain 位置识别并经 migrate-forward 消解
-1. **RESTORE BARRIER** acquire（静默 WhenReady DB writers + 阻塞 renderer mutation，全程）后经 `createSnapshot` 建 VACUUM INTO 快照（事务外；better-sqlite3 单连接同步，序列化 by construction，不需额外写锁）
-2. contributor restoreResources 文件 IO 在 withWriteTx 之外、之前
-3. 仅 DB 行导入在 withWriteTx 内
-4. 失败整库回滚是应用级动作（SQLite 单连接持文件锁——better-sqlite3 亦然，无法直接 rename 替换文件）：checkpoint(TRUNCATE) 后关连接，再安全文件提升（integrity_check + fsync+rename 原子替换 live .sqlite + 删 stale -wal/-shm + rename-aside 回退），最后重连
+1. **write quiesce**（bounded，旧 RESTORE BARRIER 的严格子集）：createSnapshot 前静默 + 排空**所有** live SQLite writer，缺一即可能违背「never delete local data」（fullex #16714）：
+   - **pause 三个 main-side DB writer**：JobManager（cron / GC / overdue）+ in-flight AI streams / agent turns + inbound channel messages；否则其写在 snapshot 后落 old live、promotion 时丢。quiesce 接口归各模块 own。
+   - **drain in-flight renderer-originated writes**：restore SHALL 保证 snapshot→relaunch 窗口内**无 renderer-originated DB 写**——这是**显式 C-import 要求，非假设**（当前 codebase WindowManager 只管窗口生命周期、DataApi/Preference IPC handler 无 restore gate，C-import 须实现）。**具体机制二选一（C-import 定 + 与 fullex sync）**：(a) WindowManager **关闭/销毁所有 renderer BrowserWindow**（kill renderer 进程，无 renderer 可发 IPC；需 main-process 进度 UI 替代 renderer `RestorePopup`，faithful to「阻塞所有窗口」）；或 (b) main-boundary `activeRestore` 标志在 DataApi mutation / `Preference_Set` IPC 入口 reject（**属 fullex #16714 废弃的「Preference/DataApi write gate」，选它须重新与 fullex 对齐**）。**「disable 窗口」不够**——disabled BrowserWindow 的 renderer JS 仍跑、仍发 IPC。比 V1 `RestorePopup`（单窗口 modal，V1 短文件复制窗口可接受）更强，因 D 模型 SQLite import 窗口更长。无论 (a)/(b)，机制生效前已 dispatch、正在 main 处理的 in-flight 写必须先**排空**（acquire write-quiet barrier：机制生效 + main-side pause 后等「无 in-flight DB write」窗口再 createSnapshot）；否则 snapshot 后落 old live、promotion 时被 work.sqlite 覆盖即丢失。
+   恢复后重启，cache 自然 fresh load；apply 时无 live writer。
+2. **`createSnapshot(work.sqlite)`** —— VACUUM INTO，作 **merge base**（= 当前 live 副本，含 `app_state` / `migration_v2_status`）。
+3. **detached 连接**（独立 better-sqlite3，非 live `DbService.sqlite`）：对 work.sqlite 跑 contributor import pipeline（handle 参数化，detached drizzle，非 `DbService.getDb()`；合并语义 SKIP / FIELD_MERGE / only-add 保留；`defer_foreign_keys=ON` + upsert / leaf-cascade，见下）+ `applyMigrations`（backup 已在 step 0 migrate-forward；custom SQL）+ **FTS rebuild**（importer 责任，in work.sqlite）+ **offline verification**（integrity_check + foreign_key_check + domain checks + FTS 一致）。不合格的 work.sqlite 永不 promote。
+4. **restore journal**（userData sidecar file，形态见下方 contract）写 + per-step write-ahead fsync + `application.relaunch()`（dev mode 不重启 → 提示手动）。
 
-本方案将 RestoreRecoveryPoint（整库 DB pre-snapshot + restore journal + 受影响文件快照）作为 in-scope 必交付项（**现状 restore safety 整体未实现**：全仓无 `createSnapshot`、无 RestoreSafetyManager、无回滚/撤销/journal/文件快照，restore 失败无任何恢复保证；本方案经 DbService `createSnapshot` + `restoreDbFromSnapshot` 补齐快照 + 回滚 + journal + 文件快照 + 失败阻塞）。**snapshot 创建失败 SHALL 阻塞恢复**（属 breaking，现状无此门）。**合并语义下首要价值是「撤销成功恢复」**（用户回退），其次才是失败回滚。contributor 不负责整库快照与回滚。
+**preboot**（`src/main/index.ts` `startApp()` 第一；`application.initPathRegistry()` 后、`await runV2MigrationGate()` 前；**separate sibling `restorePromotionGate.ts`**；先例 `runV2MigrationGate` / `MigrationDbService`；one-domain-one-file）：
 
-**Owner 切割**（recovery point 生命周期，详见 backup-restore-safety specs）：`barrier` + `createRecoveryPoint`/`commit`/`rollback` 归 `RestoreSafetyManager`（RESTORE BARRIER owner 须中立、不写 DB，防「既裁判又运动员」自指）；`RestoreRecoveryPointStore` + GC + `BackupV2_*` IPC（含 undo 编排）归 `BackupService`；`undoRestore` 是 `BackupService` 编排方法（查 store + 委托 `RestoreSafetyManager.rollback`）；on-boot crash recovery gate 独立在 `DbService.onInit`（BeforeReady）。
+5. **promotion gate**（db module 导出纯函数，消费窄 journal contract，不知 backup 语义）：校验 `state == 'staged'` ∧ **fingerprint** matches ∧ **chainTip ∈ app bundled chain**（见下方 contract）。
+   - **通过** → checkpoint(TRUNCATE) + close old live（临时连接）→ 删 stale -wal/-shm（**sidecar hygiene**，防 WAL 回放）→ rename live → `live.pre-restore-<restoreId>`（**undo snapshot，zero-copy**）→ rename work → live → **file resources promotion**（按 visibility 序，见下）→ open + integrity_check → journal terminal。
+   - **不匹配** → mark `expired` / `failed`，boot old live，surface「please re-run restore」。
+   - **gate never throws**（瞬时失败 → boot old live + report，永不 unbootable；fail-fast "Unable to Start" 仅不可恢复）。每 rename 后 directory fsync（POSIX）/ write-through move（Windows）。journal write-ahead per step + fsync，每 crash 点 resumable / revertible。
+
+**Undo**：journal { promote: `live.pre-restore-<restoreId>` } + relaunch → 同 gate path（renamed-aside old live = undo snapshot，zero-copy）。**undo 是首要价值**（§一：merge 不可逆 → undo = 整库 revert）。retention window + GC + 连续 restore 行为待定数字。
+
+**File resources 按 visibility**（关键：并非都 additive。**runtime `restoreResources` 把恢复文件写 backupRoot staging 区，preboot gate 按 journal `fileResources[]` 把 staging → live 原子 promote——contributor 运行时不直接写 live**；`RestoreResourceContext.liveFileRoot` 仅用于算 journal 的 `livePath` 目标，非 in-place live 写。详见 openspec `contexts.md` + `restore-barrier.md`）：
+
+| 资源 | visibility | 策略 |
+|---|---|---|
+| File blobs（`Data/Files/{uuid}`） | DB-gated（`file_entry` rows） | **additive-first** 安全（unreferenced blob 不可见，orphan sweep 可 reclaim） |
+| KB `{baseId}/` dirs | DB-gated，但 orphanSweep 跳目录（`if (!isFile()) continue`，只扫 `Data/Files`） | additive OK，但 abandoned restore leak 整 dir forever → **journal-driven cleanup** |
+| Notes markdown | **非 DB-gated**（notes tree 扫 `feature.notes.path`，用户可指任意 folder；`note` 表只存 starred / expanded） | additive **错**（中断后 .md 全 visible，double-pollution on retry）→ **directory-level near-atomic swap**：rename notesPath aside → move restored tree → adjacent DB rename；undo 反向 |
+
+- **序列**：DB-gated additive → DB rename → Notes dir-swap + destructive overwrites（old renamed aside，undo 必需）→ terminal。Undo 反向。
+- **orphanSweep 交互**：`runFileSweep` 检查 non-terminal restore journal 跳过（blob promote 后、DB rename 前，promoted blobs 是 old live orphans；mtime > 5min gate 会过 staging-preserved mtimes）。
+
+**importer 不变量**：merge 保留 `app_state` rows（`migration_v2_status` —— 已在 backup exclusion set，archive 不碰）。work.sqlite = `createSnapshot`(live 副本) 带 `app_state`，promotion 后 migration gate 读 `migration_v2_status=completed` 跳过 —— 结构上不会 re-run v1 import against restored DB。避免对 `app_state` 做 naive `DELETE + re-insert`。
+
+本方案 RestoreRecoveryPoint（pre-snapshot + journal + 文件资源 promotion / undo）为 in-scope 必交付项。**snapshot 创建失败 SHALL 阻塞恢复**（breaking，现状无此门）。**现状 restore safety 整体未实现**（全仓无 `createSnapshot` / promotion gate / journal）。contributor 不负责整库快照与 promotion。
 
 > [!IMPORTANT]
-> 恢复写事务内 PRAGMA defer_foreign_keys=ON（非 foreign_keys=OFF——后者在事务内是 SQLite 文档明确的 no-op，且 DbService 每次 reconnect 重放 foreign_keys=ON）。`defer_foreign_keys` 仅延迟 FK 约束 *enforcement* 到 COMMIT（COMMIT 前 `foreign_key_check` 验证整图一致），**不**禁用 ON DELETE *actions*（CASCADE/SET NULL 仍立即触发）——故 importer 须遵守「OVERWRITE 行级整替换走 **upsert（`ON CONFLICT(identityKey) DO UPDATE`）**、不 DELETE parent 行；显式 cascade（DELETE_ROW）只删 **leaf/junction 行**（其下无 ON DELETE child action）」，避免与 SQLite ON DELETE 双触发。ReferenceKind 须忠实复刻 schema onDelete（cascade/restrict 转 owning/junction、set null/no action 转 optional、set default 拒绝），由 不变量 19 校验。（注：ON DELETE RESTRICT 不可被 defer_foreign_keys 推迟、永远立即报错，与 NO ACTION 不同；本架构 importer 只删 leaf/junction，RESTRICT 实践中不触发。）DB 写走 DbService.withWriteTx（fn 内仅 DB ops，文件恢复已在事务外）。
+> 恢复写事务（**在 detached work.sqlite**）内 PRAGMA `defer_foreign_keys=ON`（非 `foreign_keys=OFF`——后者事务内是 SQLite 文档明确的 no-op）。`defer_foreign_keys` 仅延迟 FK 约束 *enforcement* 到 COMMIT（COMMIT 前 `foreign_key_check` 验证整图一致），**不**禁用 ON DELETE *actions*（CASCADE / SET NULL 仍立即触发）——故 importer 须遵守「OVERWRITE 行级整替换走 **upsert（`ON CONFLICT(identityKey) DO UPDATE`）**、不 DELETE parent 行；显式 cascade（DELETE_ROW）只删 **leaf / junction 行**（其下无 ON DELETE child action）」，避免与 SQLite ON DELETE 双触发。ReferenceKind 须忠实复刻 schema onDelete（cascade / restrict 转 owning / junction、set null / no action 转 optional、set default 拒绝），由不变量 19 校验。（注：ON DELETE RESTRICT 不可被 defer_foreign_keys 推迟、永远立即报错，与 NO ACTION 不同；本架构 importer 只删 leaf / junction，RESTRICT 实践中不触发。）
 >
-> **恢复安全三件套（针对 PR #12659 review B1/B2/B3）**：① RESTORE BARRIER（应用级写屏障，区别于逐事务 `withWriteTx`——better-sqlite3 单连接同步，writeMutex 已随 #16626 移除，写序列化 by construction）静默 WhenReady DB writers + 阻塞 renderer mutation，跨 snapshot-文件-DB-promote 全程；② 安全文件提升 rollback 序列防 WAL sidecar replay 覆盖快照；③ journal 持久状态机（6 态）+ on-boot crash recovery + completed 门；**recoverOnBoot 作为 `DbService.onInit` 内 `migrateDb` 之前的 gate**（目标态：在 `DbService.ts:139` onInit 中插入 recovery gate，使顺序为 configurePragmas → **recovery gate** → migrateDb → seeders；当前 onInit 仅前三步无 gate）——journal 存在非终态条目时先跑补偿回滚（live DB 经 `DbService.restoreDbFromSnapshot` 整库回滚；覆盖文件从 `fileSnapshots` 恢复到 pre-restore，与 runtime rollback 对称、不经 RSM）再放行 migrateDb，避免 migrateDb/seeders 碰半恢复 DB；回滚快照 schema 可能旧于 consumer，放行后 migrateDb 复用 step 0 migrate-forward 机制推进。
+> **Upstream prerequisites（gating）**：DbService 新增 `createSnapshot(targetPath)`（VACUUM INTO，事务外；export + restore merge base）+ `applyMigrations(db)`（migrate + custom-SQL 抽取为纯函数，消 `onInit` / test-helper / detached-copy triplicate）+ **preboot promotion gate**（db module 导出纯函数，`src/main/index.ts` `runV2MigrationGate()` 前，消费窄 journal contract）。**废弃**（D 模型不需要）：`restoreDbFromSnapshot`（runtime 无调用方——无 runtime rollback，pre-relaunch 失败只删 temp）/ `verifyLiveDb`（offline 在 work copy 自跑 + gate 内 post-promotion check）/ onInit recovery gate（preboot 取代——onInit 在构造函数 `new Database` 后迫使 close / reconnect 机制）；以及 `PreferenceService.reloadFromDb` / `rebroadcast`、`armWriteGate` / `disarmWriteGate`、`DataApiService.armMutationGate` / `disarmMutationGate`、lifecycle `@WriteSilenceable` 运行时静默（恢复后重启 cache 自然 fresh load；apply 时无 live writer）。须先合 upstream API PR 再合 backup restore 实现。
 >
-> **Upstream prerequisites（gating）**：依赖 DbService 新增 `createSnapshot`（事务外建整库快照，专用 VACUUM INTO；better-sqlite3 单连接同步，序列化 by construction，不需额外写锁）+ `restoreDbFromSnapshot`（**整库回滚组合 API**，含 checkpoint/close/safe-promote/reconnect/校验；rollback + recoverOnBoot 两入口共享，消 drift）+ `verifyLiveDb`（completed 门）+ PreferenceService.reloadFromDb + DataApiService.armMutationGate/disarmMutationGate + PreferenceService.armWriteGate/disarmWriteGate（RESTORE BARRIER gate），须先合 upstream API PR 再合 backup 实现。
->
-> **Preference cache 一致性**（M1）：`PreferenceService` 启动一次性 load DB 进内存 cache 后不再 re-read；故 PREFERENCES 域 `afterCommit` 须触发 `PreferenceService.reloadFromDb()+rebroadcast` 使 main + 各 renderer cache 失效重载（reloadFromDb 读已 commit 的偏好，须在 commit 之后运行，故属 post-tx `afterCommit` 而非 in-tx `afterImport`，见 §7）；整库回滚（live DB 已换）后同样触发（所有 cache 失效）。否则恢复/回滚的偏好对运行态静默不生效，直至重启。
+> [!NOTE]
+> **Journal contract（已与 fullex #16714 sync，2026-07-04）**：gate condition = **state machine + fingerprint + chainTip**（drop nonce / appVersion / TTL）。① state machine（`staged → promoting → completed/failed/expired`，write-ahead fsync；recovery 看 filesystem reality 幂等 roll forward / back，不盲目 replay = one-shot，故 nonce drop）；② **fingerprint** = 主 DB 文件 sha256，post `wal_checkpoint(TRUNCATE)`，assert `busy==0 && checkpointed==log`（WAL 下 mtime / size / header counter 都不更新，checkpoint-hash 唯一无 false-match；两边对称）；③ **chainTip** = work.sqlite last applied migration `{ folderMillis, hash }`，gate promote 仅当 app bundled migrations chain **含**此 tip（取代 appVersion equality——drizzle `migrate()` 对 ahead-of-chain 是 silent no-op，version equality 会 false-reject 共享 chain 的 patch 升级）。journal = userData 内 **sidecar file**（非 boot-config：全局 + debounced 无 fsync；非 `app_state`：arbiter 不能在被 arbitrate 的 DB 内，aside rename 会 carry 走）；restore report + undo bookkeeping 进 **work.sqlite 自己的 `app_state`**（原子 promote；同 `migration_v2_status` / seed journal 模式）。4 实现期细节待定（已问 #16714，非阻塞）：Notes dir-swap 外部 folder 风险 / chainTip hash 范围 / KB cleanup 机制 / orphanSweep 归属。
 
 ---
 
@@ -466,5 +493,5 @@ flowchart TB
 - 精简备份覆盖换机后最影响继续使用的内容：聊天、助手/Agent 配置、模型服务配置、常用设置；不含附件、知识库、翻译历史、paintings。
 - 用户自填模型服务密钥默认随自用备份恢复；企业统一下发 key 不属此备份；不做分享模式。
 - 恢复前先自动保存当前状态（整库 DB 快照 + 受影响文件快照）；失败或用户撤销可回到恢复前；RestoreRecoveryPoint 为 in-scope 必交付。
-- 恢复写路径走 `DbService.withWriteTx` + `defer_foreign_keys=ON`（非 FK OFF）显式 cascade。
+- 恢复写路径走 **detached 写事务**（`withDetachedWriteTx(handle, fn)` —— wrap `db.transaction(fn, { immediate: true })` over detached `work.sqlite` handle，**非** live `DbService.withWriteTx`；D 模型 live DB 永不进程内写）+ `defer_foreign_keys=ON`（非 FK OFF）显式 cascade。
 - 实施前提：`agent_task` 当前 main 不存在（agent.task 已迁移 JobManager）；task 定义在 `job_schedule.type='agent.task'`，按 row-scope 归 AGENTS（§3.5 域总览 AGENTS 行），`agent_channel_task.taskId` 指向这些行。`painting`/`agent_workspace` 仅 main 有，spec 含（post-sync 目标态）；跨分支差异由 manifest `schemaMigrationId` + §9 step 0 migrate-forward 处理。

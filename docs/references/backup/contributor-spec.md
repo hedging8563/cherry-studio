@@ -14,7 +14,7 @@
 |---|---|---|
 | `schema`（Entity facts） | 表归属、引用事实、主键形态、聚合边界、file-ref source、JSON 软引用 | SET_NULL/DELETE_ROW 动作、导入顺序、恢复策略 |
 | `backupPolicy` | 省略引用 override、唯一键合并、列级 FIELD_MERGE（4 strategy 枚举：`remote-fills-local-null` / `remote-fills-local-empty` / `deep-merge` / `local-priority`）、`platformSpecificKeys` | 数据库 I/O、文件操作、异步 hook |
-| `operations`（可选） | 文件资源发现、beforeArchive、逐行 transform、afterImport、blob 恢复、cloneAggregate | 可用纯数据表达的事实和策略 |
+| `operations`（可选） | 文件资源发现、beforeArchive、逐行 transform、afterImport（in detached `work.sqlite`，D 模型）、blob 恢复、cloneAggregate | 可用纯数据表达的事实和策略 |
 
 - contributor 是**冻结的常量对象**（非 class）：`export const TOPICS_CONTRIBUTOR = deepFreeze<BackupContributor>({ domain, schema, backupPolicy, operations })`。理由是纯数据 + 无状态纯函数 hook；`schema-only` 域 `operations: undefined` 天然支持；`deepFreeze` 保证 finalize 后不可变（strict mode 下任何 mutation 抛 TypeError）。
 - **核心机制是 `schema.aggregates`（聚合边界 AggregateBoundary）**：把 object-boundary 的 SKIP/OVERWRITE/RENAME 从文字描述提升为**静态可校验**机制——一个 topic 连同它的 message 树、一次 Agent 会话连同它的消息，要么整体导入要么整体跳过。
@@ -55,7 +55,9 @@
 
 **finalize 不连 DB**：只读 codegen 产物（`dbSchemaRefs.ts`）+ contributor 声明，不调 `application.get('DbService')`。DB 实际表覆盖由 **coverage test（CI）守门**——finalize 校验声明间一致性，coverage test 校验实际 schema 表覆盖，两者互补。
 
-**BackupService 仍是 lifecycle service**（持 orchestrator/RESTORE BARRIER/journal 等长生命周期资源）：`@Injectable('BackupService') + @ServicePhase(Phase.WhenReady) + @DependsOn(['RestoreSafetyManager'])`。**不** `@DependsOn(['DbService'])`（DbService 是 BeforeReady，phase 顺序自动先于 WhenReady 启动；CLAUDE.md 硬约束：WhenReady 服务不得 `@DependsOn` BeforeReady 服务）。
+**BackupService 仍是 lifecycle service**（持 orchestrator / write quiesce 编排 / restore journal 写入 + relaunch 触发等长生命周期资源——D 模型，见 §8；preboot promotion gate 是 db module 导出纯函数，不经 BackupService）：`@Injectable('BackupService') + @ServicePhase(Phase.WhenReady)`。**不** `@DependsOn(['DbService'])`（DbService 是 BeforeReady，phase 顺序自动先于 WhenReady 启动；CLAUDE.md 硬约束：WhenReady 服务不得 `@DependsOn` BeforeReady 服务）。
+
+> **恢复安全（D 模型，对齐 fullex #16714）**：restore 走 **detached merge into `work.sqlite` + preboot atomic promotion**——**永不进程内触碰 live DB**（详见 backup-architecture §9）。BackupService 在运行时只编排 write quiesce（bounded，JobManager + AI streams + Channel + drain in-flight renderer 写，owned by those modules + BackupService 编排）+ `createSnapshot(work.sqlite)` merge base + detached import pipeline + journal 写入 + `application.relaunch()`；preboot promotion gate（`src/main/index.ts` `startApp()` 第一，`initPathRegistry()` 后、`runV2MigrationGate()` 前，separate sibling `restorePromotionGate.ts`）消费窄 journal contract 做 atomic rename promotion + undo（renamed-aside `live.pre-restore-<restoreId>`）。contributor 不负责整库快照与 promotion。**已废弃**（D 模型不需要）：RESTORE BARRIER runtime silence（allowlist + `@WriteSilenceable` + renderer mutation gate）/ `restoreDbFromSnapshot`（runtime 无调用方——无 runtime rollback，pre-relaunch 失败只删 temp）/ `verifyLiveDb`（offline 在 work copy 自跑 + gate 内 post-promotion check）/ onInit recovery gate（preboot 取代）/ `PreferenceService.reloadFromDb` + rebroadcast / `armWriteGate` / `armMutationGate` / `rearmSchedules` / `afterCommit` hook（恢复后重启 cache 自然 fresh load；apply 时无 live writer——PREFERENCES cache 由 `PreferenceService.onInit` fresh load，AGENTS timer 由 `JobManager` startup recovery re-arm）。
 
 > 检查：`serviceRegistry.ts` **SHALL NOT** 含 `ContributorManager`。
 
@@ -138,6 +140,56 @@
 > **≠ 已删的 ID remap**：remap 给 uuid-entity 源记录 PK 生成新 uuid（不需要，保留源 PK 幂等）；identity propagation 把源 FK 重定向到 natural-key target 的 canonical id（源记录 PK 不变，natural-key 合并所必需）。
 
 **典型工作流（AGENTS）**：`agent_session.workspaceId → 独立 agent_workspace 聚合`（域内跨聚合 owning reference：同属 AGENTS、分属两个独立聚合根）。workspaceId 是 cascade NOT NULL owning FK，但 target `agent_workspace`（natural-key `path` UNIQUE）是独立聚合根、非 `session.root`——故不变量 14 不计它入 `session.members`、workspace 不强制为 member。这不等于逃避 owning 校验：不变量 25 强制 AGENTS 声明此 FK → 不变量 19 校验 onDelete=cascade 对应 kind=owning 自洽（codegen `DB_FOREIGN_KEYS` 作数据源）。`agent_session` renamable:false（跨聚合 owning 克隆矛盾 + 撞 `path` UNIQUE）。
+
+---
+
+## 5a. 恢复执行模型 + hook 边界（D 模型，对齐 fullex #16714）
+
+> 详见 backup-architecture §9。contributor 只负责**静态事实与合并语义**，恢复执行模型（detached merge + preboot promotion）由 orchestrator + db module gate 承载。
+
+### 执行模型：永不进程内触碰 live DB
+
+restore 走 **D 模型**（detached merge + preboot promotion）——运行时在 detached `work.sqlite` 副本上合并，preboot 原子 rename promotion。**结构性消除** half-restored / WAL sidecar replay / runtime rollback 整类风险。
+
+**运行时（UI 阻塞，BackupService 编排）**：
+1. **manifest 版本门禁**（只读归档，**不碰 live DB**）：格式校验 + schema 比对（`schemaMigrationId` 按 `when`(folderMillis) 序），决定 migrate-forward / 直接导入 / 拒绝。migrate-forward 对 `backup.sqlite` 在**独立 better-sqlite3 连接**（非 live `DbService.sqlite`）跑 drizzle `migrate`。
+2. **write quiesce**（bounded，旧 RESTORE BARRIER 的严格子集）：pause 三个自主 main-side DB writer —— JobManager（cron / GC / overdue）+ in-flight AI streams / agent turns + inbound channel messages **+ drain in-flight renderer-originated writes**（DataApi mutation / `Preference_Set` IPC —— 阻塞前已 dispatch 的须先排空，否则 snapshot 后落 old live、promotion 时被覆盖丢失）。**无** renderer mutation gate / Preference/DataApi write gate（「无 gate」仅指**新写** gate，restore 启动即**全局阻塞所有 renderer 窗口**（WindowManager，非单窗口 modal）本身即阻新写；恢复后重启 cache 自然 fresh load；apply 时无 live writer）。三个自主 writer 的 quiesce 接口归各模块 own；renderer in-flight drain + 全局窗口阻塞由 BackupService 编排（acquire write-quiet barrier）。
+3. **`createSnapshot(work.sqlite)`** —— VACUUM INTO，作 **merge base**（= 当前 live 副本，含 `app_state` / `migration_v2_status`）。
+4. **detached import**（独立 better-sqlite3，非 live `DbService.sqlite`）：对 work.sqlite 跑 contributor import pipeline（handle 参数化，detached drizzle；合并语义 SKIP / FIELD_MERGE / only-add 保留）+ **FTS rebuild**（importer 责任，in work.sqlite）+ **offline verification**（integrity_check + foreign_key_check + domain checks + FTS 一致）。不合格的 work.sqlite 永不 promote。
+5. **restore journal**（userData sidecar file）写 + per-step write-ahead fsync + `application.relaunch()`（dev mode 不重启 → 提示手动）。
+
+**preboot promotion gate**（`src/main/index.ts` `startApp()` 第一；`application.initPathRegistry()` 后、`await runV2MigrationGate()` 前；**separate sibling `restorePromotionGate.ts`**；db module 导出纯函数，消费窄 journal contract，不知 backup 语义）：校验 `state=='staged'` ∧ **fingerprint** matches ∧ **chainTip** ∈ app bundled chain → checkpoint(TRUNCATE) + close old live → 删 stale -wal/-shm（sidecar hygiene）→ rename live → `live.pre-restore-<restoreId>`（**undo snapshot，zero-copy**）→ rename work → live → **file resources promotion**（按 visibility 序）→ open + integrity_check → journal terminal。**gate never throws**（瞬时失败 → boot old live + report，永不 unbootable）。
+
+**journal contract**（已与 fullex #16714 sync，2026-07-04）：gate condition = **state machine + fingerprint + chainTip**（drop nonce / appVersion / TTL）。
+- **state machine**：`staged → promoting → completed/failed/expired`（write-ahead fsync；recovery 看 filesystem reality 幂等 roll forward / back，不盲目 replay = one-shot，故 nonce drop）。
+- **fingerprint** = 主 DB 文件 sha256，post `wal_checkpoint(TRUNCATE)`，assert `busy==0 && checkpointed==log`（WAL 下 mtime / size / header counter 都不更新，checkpoint-hash 唯一无 false-match；两边对称）。
+- **chainTip** = work.sqlite last applied migration `{ folderMillis, hash }`，gate promote 仅当 app bundled migrations chain **含**此 tip（取代 appVersion equality——drizzle `migrate()` 对 ahead-of-chain 是 silent no-op，version equality 会 false-reject 共享 chain 的 patch 升级）。
+- journal 位置 = userData 内 **sidecar file**（非 boot-config：全局 + debounced 无 fsync；非 `app_state`：arbiter 不能在被 arbitrate 的 DB 内，aside rename 会 carry 走）。restore report + undo bookkeeping 进 **work.sqlite 自己的 `app_state`**（原子 promote；同 `migration_v2_status` / seed journal 模式）。
+
+**Undo**：journal { promote: `live.pre-restore-<restoreId>` } + relaunch → 同 gate path（renamed-aside old live = undo snapshot，zero-copy）。undo 是首要价值（merge 不可逆 → undo = 整库 revert）。retention window + GC + 连续 restore 行为待定数字。
+
+**importer 不变量**：merge 保留 `app_state` rows（`migration_v2_status` —— 已在 backup exclusion set，archive 不碰）。work.sqlite = `createSnapshot`(live 副本) 带 `app_state`，promotion 后 migration gate 读 `migration_v2_status=completed` 跳过 —— 结构上不会 re-run v1 import against restored DB。避免对 `app_state` 做 naive `DELETE + re-insert`。
+
+### File resources 按 visibility（关键：并非都 additive）
+
+| 资源 | visibility | 策略 |
+|---|---|---|
+| File blobs（`Data/Files/{uuid}`） | DB-gated（`file_entry` rows） | **additive-first** 安全（unreferenced blob 不可见，orphan sweep 可 reclaim） |
+| KB `{baseId}/` dirs | DB-gated，但 orphanSweep 跳目录（`if (!isFile()) continue`，只扫 `Data/Files`） | additive OK，但 abandoned restore leak 整 dir forever → **journal-driven cleanup** |
+| Notes markdown | **非 DB-gated**（notes tree 扫 `feature.notes.path`，用户可指任意 folder；`note` 表只存 starred / expanded） | additive **错**（中断后 .md 全 visible，double-pollution on retry）→ **directory-level near-atomic swap**：rename notesPath aside → move restored tree → adjacent DB rename；undo 反向 |
+
+- **序列**：DB-gated additive → DB rename → Notes dir-swap + destructive overwrites（old renamed aside，undo 必需）→ terminal。Undo 反向。
+- **orphanSweep 交互**：`runFileSweep` 检查 non-terminal restore journal 跳过（blob promote 后、DB rename 前，promoted blobs 是 old live orphans；mtime > 5min gate 会过 staging-preserved mtimes）。
+
+### 恢复期 hook 边界（in-tx vs post-tx 严格分离）
+
+恢复期 hook 分两阶段——**in detached work.sqlite，commit 前** vs **（D 模型无 post-tx）**，边界严格分离（符合 §9「detached 写事务 fn 内仅 DB ops」约束 —— 事务 over detached `work.sqlite` handle，**非** live `DbService.withWriteTx`）：
+
+- **`afterImport`（in detached work.sqlite，commit 前）**：在 detached 写事务**内**、commit **之前**执行，只允许依赖已写入 work.sqlite 行的派生操作——主要是 **FTS 重建**（TOPICS 调 `rebuildMessageFts`、AGENTS 调 `rebuildSessionMessageFts`，复用 in-tx 已导入行、重建 FTS5 content table，使其与业务行在同一事务内一致提交）。这是 importer 责任，在 work.sqlite offline 完成，非 live。
+  - > **target-state（C-import 待实现）**：上述 detached `afterImport` 是 D 模型目标态。现有 neutral-layer 类型（`src/main/data/db/backup/contexts.ts` 的 `AfterImportContext` / `RestoreResourceContext`）仍是 pre-D-model（`backupDb` + 只读 `liveDb`，无 detached writable handle）——C-import 阶段 SHALL 更新这些类型以暴露 detached `work.sqlite` 写 handle，并把 `liveDb` 语义改为「detached work.sqlite 只读视图」。在 types 更新前，contributor 的 afterImport 实现（FTS rebuild in work.sqlite）缺 handle；故该 hook 的**实现**属 C-import（等 upstream `createSnapshot` / `applyMigrations` / preboot gate 合 main），本期 contributor 仅声明 operations policy。
+- **（D 模型无 `afterCommit`）**：live DB 永不进程内写，detached work.sqlite 不持运行时 cache；旧 post-tx 职责（PREFERENCES cache reload / AGENTS `job_schedule` timer re-arm）由 preboot promotion 后**重启**自然完成——PREFERENCES cache 由 `PreferenceService.onInit` fresh load，AGENTS timer 由 `JobManager` startup recovery re-arm。故不再需要 `reloadFromDb` / `rearmSchedulesAfterImport` / `afterCommit` hook。
+
+> **merge 语义不变**：SKIP / FIELD_MERGE / aggregate 冲突 / identity propagation（§5）全部保留，仅 import target 从 live 改为 detached work.sqlite。`pre-snapshot` 保留为 `createSnapshot(work.sqlite)` merge base；journal state machine 的 crash-safety 保留为 preboot promotion gate 的 write-ahead + 幂等 roll forward/back。FTS importer 离线在 work.sqlite 重建（in-tx 一致）。
 
 ---
 
@@ -234,13 +286,13 @@ export const TOPICS_CONTRIBUTOR = deepFreeze<BackupContributor>({
 - `specs/modular-backup-contributor/domains/config-domains.md` — PROVIDERS/PREFERENCES/TAGS_GROUPS 等配置域（FIELD_MERGE / 设置类 SKIP / platformSpecificKeys）。
 - `specs/modular-backup-contributor/domains/aggregate-domains.md` — TOPICS/ASSISTANTS/AGENTS/KNOWLEDGE 等聚合域（renamable、跨聚合 owning ref、row-scope）。
 
-### 恢复安全（capability `backup-restore-safety`）
+### 恢复安全（capability `backup-restore-safety`）— D 模型
 - `specs/backup-restore-safety/spec.md` — capability 级 requirements 汇总。
-- `specs/backup-restore-safety/backup-service-lifecycle.md` — BackupService lifecycle（WhenReady + @DependsOn(RestoreSafetyManager)）+ ContributorManager non-lifecycle singleton（A3/L304 修订源）+ IPC channel。
+- `specs/backup-restore-safety/backup-service-lifecycle.md` — BackupService lifecycle（WhenReady；编排放 quiesce / journal / relaunch；preboot promotion gate 是 db module 纯函数不经 BackupService）+ ContributorManager non-lifecycle singleton（A3/L304 修订源）+ IPC channel。
 - `specs/backup-restore-safety/export-orchestrator.md` — ExportOrchestrator 5 步流程（VACUUM INTO 复制 → beforeArchive → 收集资源）。
-- `specs/backup-restore-safety/import-orchestrator.md` — ImportOrchestrator 7 步流程（聚合边界冲突策略 → defer FK withWriteTx 导入 → FTS 重建）。
-- `specs/backup-restore-safety/restore-barrier.md` — RESTORE BARRIER（应用级写屏障，区别于逐事务 writeMutex）。
-- `specs/backup-restore-safety/restore-recovery-point.md` — RestoreRecoveryPoint（整库 pre-snapshot + journal + 文件快照 + upstream DbService/PreferenceService gating）。
+- `specs/backup-restore-safety/import-orchestrator.md` — ImportOrchestrator 流程（聚合边界冲突策略 → defer FK **detached 写事务**（`withDetachedWriteTx`，**非** live `DbService.withWriteTx`）导入到 **detached work.sqlite** → FTS 重建 in work.sqlite → offline verify）。
+- `specs/backup-restore-safety/restore-barrier.md` — write quiesce（bounded；3 自主 main-side writer + drain in-flight renderer 写；per-owner pause；旧 RESTORE BARRIER runtime silence 的严格子集）+ restore journal（userData sidecar file；state machine + fingerprint + chainTip contract；crash-safety write-ahead fsync；已与 fullex #16714 sync）+ preboot promotion gate（`src/main/index.ts` `startApp()` 第一，`runV2MigrationGate` 前，separate sibling `restorePromotionGate.ts`；atomic rename promotion + undo + file resources visibility 序）。
+- `specs/backup-restore-safety/restore-recovery-point.md` — recovery point 流程（manifest 门禁 → migrate-forward → write quiesce + `createSnapshot(work.sqlite)` merge base → detached import + FTS rebuild + offline verify → journal + relaunch → preboot promotion）。
 
 ### 评审记录
 - `FINAL_REVIEW.md` — 架构 final review。
