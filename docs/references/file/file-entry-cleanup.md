@@ -56,9 +56,9 @@ cleanup_policy TEXT NOT NULL DEFAULT 'manual'
 | `manual` | Keep the entry even at zero refs. Cleanup requires an explicit user/caller action. |
 | `delete_when_unreferenced` | FileManager may delete the entry once it has zero persistent refs, no temp-session refs, and is older than the grace window. |
 
-### 4.1 Assignment at creation — all current paths are `delete_when_unreferenced`
+### 4.1 Assignment at creation — business-owned creation paths are `delete_when_unreferenced`
 
-Files strictly follow their owning business object's lifecycle. Chat attachments are **copies** (the user's original stays on disk), so automatic reclamation loses nothing irreplaceable; "pin to library" is the retention escape hatch.
+Files that follow an owning business object's lifecycle are `delete_when_unreferenced`. Chat attachments are **copies** (the user's original stays on disk), so automatic reclamation loses nothing irreplaceable; "pin to library" is the retention escape hatch. Add-to-library paths (a Files-page upload the user chose to keep) are `manual`.
 
 | Creation path | Policy |
 |---|---|
@@ -66,6 +66,7 @@ Files strictly follow their owning business object's lifecycle. Chat attachments
 | AI-generated images (`src/main/ai/AiService.ts`) | `delete_when_unreferenced` |
 | Painting inputs / outputs (`downloadImages.ts`, `runPainting.ts`, composer input hook) | `delete_when_unreferenced` |
 | Image-generation transient inputs (`imageGenerationJobHandler.ts`) | `delete_when_unreferenced` — its current ad-hoc post-job `permanentDelete` is **removed**; the cleanup pass takes over (worst-case residency ≈ grace + interval, acceptable for a transient input) |
+| Files-page uploads (add-to-library, `src/renderer/pages/files/FilesPage.tsx`) | `manual` |
 | Future user-facing "add to library" flows | `manual` |
 
 **Type rule**: `cleanupPolicy` is **required** in the TS creation surfaces (`CreateFileEntryRowSchema`, `CreateInternalEntryParams` / `EnsureExternalEntryParams` IPC schemas) so every caller makes an explicit choice at compile time. The DB default `'manual'` exists only as the safe backstop for migration and raw-SQL paths — a forgotten assignment leaks (recoverable) instead of deleting (unrecoverable).

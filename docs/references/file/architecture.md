@@ -853,7 +853,7 @@ await fileRefService.createTempSessionRef({ fileEntryId, sourceId: sessionId, ro
 await fileRefService.cleanupTempSessionSource(sessionId)
 ```
 
-The orphan sweep prunes temp-session refs whose `file_entry` row no longer exists, then reports active file entries with zero refs. Persistent source cleanup is not scanned generically because FK cascades own that path.
+The orphan sweep prunes temp-session refs whose `file_entry` row no longer exists, then reports active **manual-policy** file entries with zero refs (`delete_when_unreferenced` zero-ref entries are owned by the cleanup pass, not this report). Persistent source cleanup is not scanned generically because FK cascades own that path.
 
 #### (2b) Developer Checklist for Adding a New sourceType
 

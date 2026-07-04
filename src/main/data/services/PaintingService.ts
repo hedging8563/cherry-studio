@@ -275,7 +275,6 @@ class PaintingService {
       () => application.get('DbService').getDb().delete(paintingTable).where(eq(paintingTable.id, id)).run(),
       defaultHandlersFor('Painting', id)
     )
-
     logger.info('Deleted painting', { id })
   }
 

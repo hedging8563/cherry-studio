@@ -7,7 +7,8 @@
  *    FK-constrained by their owning source tables, so there is no generic
  *    source-orphan cleanup path. The DB pass prunes CacheService-backed
  *    temp-session refs that point at missing `file_entry` rows, then reports
- *    active entries with zero refs.
+ *    active **manual-policy** entries with zero refs (`delete_when_unreferenced`
+ *    zero-ref entries belong to the cleanup pass, not this report).
  *
  * 2. **runFileSweep** (FS-level, file-manager-architecture §10):
  *    enumerates `{userData}/Data/Files/` for UUID-named files without a

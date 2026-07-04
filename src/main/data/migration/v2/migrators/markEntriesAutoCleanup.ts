@@ -7,7 +7,8 @@ const UPDATE_CHUNK_SIZE = 500
 
 /**
  * Flip already-inserted `file_entry` rows to `cleanup_policy =
- * 'delete_when_unreferenced'` (file-entry-cleanup.md §7.1).
+ * 'delete_when_unreferenced'` (file-entry-cleanup.md §7.2 — classification by
+ * reference state).
  *
  * This is an UPDATE by design, not a value the ref-row inserts could carry:
  * `cleanup_policy` is a `file_entry` column, while the chat/painting migrators

@@ -12,7 +12,7 @@ Deleting a chat topic, message, or painting now reclaims the files that were exc
 
 ## Why this matters to the user
 
-Users who relied on the Files page as a permanent archive of every file ever uploaded or generated will see some files disappear after deleting the chat, topic, or painting that used them — this is expected space reclamation, not data loss of anything still referenced elsewhere. Reclamation is not instant: it runs on a background pass (on app start, every 30 minutes when idle, and shortly after a delete) with roughly a one-hour grace window, so a file is not removed the instant its owner is deleted.
+Users who relied on the Files page as a permanent archive of every file ever uploaded or generated will see some files disappear after deleting the chat, topic, or painting that used them — this is expected space reclamation, not data loss of anything still referenced elsewhere. Reclamation is not instant: it runs on a background pass (on app start, and every 30 minutes when idle) with roughly a one-hour grace window, so a file is not removed the instant its owner is deleted.
 
 ## What the user should do
 

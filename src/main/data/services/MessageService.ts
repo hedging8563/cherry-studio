@@ -1348,7 +1348,7 @@ export class MessageService {
     }
 
     // Use transaction for atomic delete + activeNodeId update
-    const result = application.get('DbService').withWriteTx((tx) => {
+    return application.get('DbService').withWriteTx((tx) => {
       let deletedIds: string[]
       let reparentedIds: string[] | undefined
       let newActiveNodeId: string | null | undefined
@@ -1462,8 +1462,6 @@ export class MessageService {
         newActiveNodeId
       }
     })
-
-    return result
   }
 
   /**
@@ -1477,7 +1475,7 @@ export class MessageService {
    * so the single-root invariant holds — and clears `activeNodeId`.
    */
   clearTopicMessages(topicId: string): { deletedIds: string[] } {
-    const result = application.get('DbService').withWriteTx((tx) => {
+    return application.get('DbService').withWriteTx((tx) => {
       const rootId = this.getRootMessageIdTx(tx, topicId)
 
       const rows = tx
@@ -1497,8 +1495,6 @@ export class MessageService {
       logger.info('Cleared topic messages', { topicId, count: deletedIds.length })
       return { deletedIds }
     })
-
-    return result
   }
 
   /**
