@@ -113,7 +113,7 @@ LIMIT :batch   -- default 100 per pass
 Same philosophy as the FS sweep's abort (`file-manager-architecture.md` §10.4), defending against classification/migration bugs:
 
 - candidates < 20 → always proceed;
-- otherwise, if candidates > 50% of all `file_entry` rows → the **automatic** pass (init / interval / nudge, and unconfirmed `runSweep`) aborts, deletes nothing, and `warn`-logs with counts.
+- otherwise, if candidates > 50% of all `file_entry` rows → the **automatic** pass (init / interval, and unconfirmed `runSweep`) aborts, deletes nothing, and `warn`-logs with counts.
 
 Unlike the FS sweep — where half the disk suddenly lacking DB rows is almost certainly an upstream bug — this guard has a **legitimate trigger**: a user clearing most of their chats at once can push the candidate fraction past 50%, and since neither the numerator nor the denominator then moves, a bare abort would latch forever. The abort therefore must not be a dead end:
 
@@ -141,11 +141,12 @@ After commit, run the existing `cleanupDeletedEntry` from `permanentDelete`'s im
 - Once on FileManager init, after `danglingCache.initFromDb()`.
 - `BaseService.registerInterval()`, every 30 min, **idle-gated** (below).
 - Inside `runSweep()` — the cleanup UI's DB pass becomes "report `manual` zero-ref entries / reclaim `delete_when_unreferenced` ones" over the same anti-join.
-- `FileManager.scheduleCleanup()` — a debounced (~5s) JS-level nudge business delete flows may call after committing. Pure latency optimization; the interval is the reliability mechanism. **No DB trigger is involved anywhere.**
+
+**No DB trigger is involved anywhere**, and — deliberately — no per-delete-flow nudge either. Business delete paths drop refs via FK cascade, so a JS-level nudge can only be sprinkled imperatively across every ref-dropping delete site: it multiplies with each new path, and a forgotten call degrades silently. An earlier revision shipped a debounced `scheduleCleanup()` nudge from the topic/message/painting deletes; it was removed because the latency it bought (reclaim in ~5s instead of ≤30min idle / ≤2h active / next init pass) is invisible for a background hygiene process whose grace window already accepts hours. If sub-interval reclamation ever becomes a product requirement, reintroduce it as a domain event FileManager subscribes to — not as scattered imperative calls.
 
 **Idle gate on interval ticks.** At each tick, run only if `PowerService.getSystemIdleTime() ≥ 60s` (`core/power/PowerService.ts`; FileManager declares `@DependsOn(['PowerService'])` — same WhenReady phase) **or** the last completed pass is > 2h old (reliability floor for always-active sessions); otherwise skip and let the next tick re-check. This keeps background deletions out of moments the user is actively working, at the cost of one native call per tick.
 
-The gate applies to interval ticks **only**. The init pass (previous-session backlog), the nudge (fires right after a user-initiated delete — the user is active by definition, so gating it would neuter it), and `runSweep` / confirmed drains (explicit user actions) all run ungated. Note this is still timer-driven: `powerMonitor` pushes no "became idle" event for arbitrary thresholds, so idleness can only be sampled — an idle gate refines the interval, it cannot replace it.
+The gate applies to interval ticks **only**. The init pass (previous-session backlog) and `runSweep` / confirmed drains (explicit user actions) run ungated. Note this is still timer-driven: `powerMonitor` pushes no "became idle" event for arbitrary thresholds, so idleness can only be sampled — an idle gate refines the interval, it cannot replace it.
 
 ### 5.6 Failure handling & observability
 
@@ -222,7 +223,7 @@ Shipped in the same PR series:
   - safety threshold → automatic pass aborts, nothing deleted;
   - over-threshold candidate set + `confirmed` invocation → drains (batched, per-candidate re-verified); automatic passes resume once under threshold;
   - candidate query covers every table in `persistentFileRefTablesBySourceType` (coverage test);
-  - idle gate: active user (< 60s idle) → tick skipped; idle → runs; > 2h since last completed pass → runs despite activity; init/nudge/confirmed paths unaffected by the gate;
+  - idle gate: active user (< 60s idle) → tick skipped; idle → runs; > 2h since last completed pass → runs despite activity; init/confirmed paths unaffected by the gate;
   - batch limit respected; failed candidate retried next pass (idempotence).
 - **Policy lifecycle**: `ensureExternalEntry` reuse upgrades auto→manual and never downgrades; the DataApi entry PATCH sets both directions.
 - **Migrators**: ref-backfilled files → auto; zero-ref survivors → manual.
@@ -244,7 +245,7 @@ Rejected because every load-bearing property turned out to be equaled or beaten 
 
 ### 10.2 Trigger-as-signal variant (dirty flag)
 
-A slimmed hybrid was considered: keep the triggers but reduce them to a "needs scan" signal the periodic pass checks before running the anti-join. Rejected: it optimizes a cost that does not exist (skipping a <5ms query every 30 min) while retaining most trigger costs — per-table trigger maintenance, business-tx write amplification, signal-row lifecycle choreography (cleared too early → lost signal; too late → redundant scans). It cannot improve latency either, because the signal is still only visible when JS polls. Per-entry signals additionally reintroduce the never-referenced blind spot unless creation also signals or a full scan runs as backstop — at which point the signal pays for nothing. If low latency is ever wanted, the JS-level `scheduleCleanup()` nudge (§5.5) achieves it without touching the DB.
+A slimmed hybrid was considered: keep the triggers but reduce them to a "needs scan" signal the periodic pass checks before running the anti-join. Rejected: it optimizes a cost that does not exist (skipping a <5ms query every 30 min) while retaining most trigger costs — per-table trigger maintenance, business-tx write amplification, signal-row lifecycle choreography (cleared too early → lost signal; too late → redundant scans). It cannot improve latency either, because the signal is still only visible when JS polls. Per-entry signals additionally reintroduce the never-referenced blind spot unless creation also signals or a full scan runs as backstop — at which point the signal pays for nothing. If low latency is ever wanted, a JS-level nudge from delete flows achieves it without touching the DB (see §5.5 for why the shipped revision dropped even that).
 
 ### 10.3 Per-business `onSourceDeleted` hooks
 
@@ -259,7 +260,7 @@ Cannot distinguish an intentionally retained library file from business-owned re
 Revisit the discovery mechanism only when measurement demands it, in this order:
 
 1. **Partial index** on `cleanup_policy = 'delete_when_unreferenced'` — first lever if the candidate query measures slow (it shrinks the anti-join's driving set to auto entries only).
-2. **Queue/outbox upgrade** — justified only if (a) observed pass duration materially blocks the main process at real user scale (recall better-sqlite3 is synchronous) despite the partial index, or (b) a product requirement emerges for sub-interval reclamation that the JS nudge cannot satisfy, or (c) `file_entry` grows by orders of magnitude (≫100k rows). If that day comes, §10.1's blind-spot and grace-window fixes are mandatory parts of any queue implementation.
+2. **Queue/outbox upgrade** — justified only if (a) observed pass duration materially blocks the main process at real user scale (recall better-sqlite3 is synchronous) despite the partial index, or (b) a product requirement emerges for sub-interval reclamation that an event-driven JS nudge (§5.5) cannot satisfy, or (c) `file_entry` grows by orders of magnitude (≫100k rows). If that day comes, §10.1's blind-spot and grace-window fixes are mandatory parts of any queue implementation.
 
 ## 12. Adding a New Persistent File Ref Source
 

@@ -1,12 +1,11 @@
 /**
- * Idle-gated interval tick + debounced nudge coalescing for FileManager's
- * entry-cleanup wiring (docs/references/file/file-entry-cleanup.md
- * Task 6). Uses a light instantiate-and-spy harness rather than the
- * DB-backed integration harness (FileManager.integration.test.ts) — these
- * tests gate the TICK/DEBOUNCE logic only; the cleanup pass itself is
- * covered by entryCleanup.test.ts (Task 5).
+ * Idle-gated interval tick for FileManager's entry-cleanup wiring
+ * (docs/references/file/file-entry-cleanup.md §5.5). Uses a light
+ * instantiate-and-spy harness rather than the DB-backed integration harness
+ * (FileManager.integration.test.ts) — these tests gate the TICK logic only;
+ * the cleanup pass itself is covered by entryCleanup.test.ts.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // PowerService is not a default mock service, so wrap `get` to return a
 // controllable idle-time stub. `powerState.idleSeconds` is mutated per test.
@@ -53,10 +52,6 @@ describe('FileManager entry-cleanup wiring', () => {
     fm = new FileManager()
   })
 
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
   it('interval tick skips when the user is active and lastRun is recent', async () => {
     powerState.idleSeconds = 5
     const spy = vi.spyOn(fm, 'runEntryCleanup').mockResolvedValue(completedReport())
@@ -82,18 +77,6 @@ describe('FileManager entry-cleanup wiring', () => {
     ;(fm as unknown as { lastCleanupCompletedAt: number }).lastCleanupCompletedAt = Date.now() - 3 * 60 * 60 * 1000
 
     await (fm as unknown as { entryCleanupTick(): Promise<void> }).entryCleanupTick()
-
-    expect(spy).toHaveBeenCalledTimes(1)
-  })
-
-  it('scheduleCleanup coalesces bursts into one run', async () => {
-    vi.useFakeTimers()
-    const spy = vi.spyOn(fm, 'runEntryCleanup').mockResolvedValue(completedReport())
-
-    fm.scheduleCleanup()
-    fm.scheduleCleanup()
-    fm.scheduleCleanup()
-    await vi.advanceTimersByTimeAsync(5_000)
 
     expect(spy).toHaveBeenCalledTimes(1)
   })

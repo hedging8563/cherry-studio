@@ -1,7 +1,6 @@
 // Load the sibling so it self-registers in the data-service registry (prod loads it via its DataApi handler).
 import '@data/services/TopicService'
 
-import { application } from '@application'
 import { fileEntryTable } from '@data/db/schemas/file'
 import { chatMessageFileRefTable } from '@data/db/schemas/fileRelations'
 import { messageTable } from '@data/db/schemas/message'
@@ -1681,21 +1680,6 @@ describe('MessageService', () => {
       expect(byId.get('c1')?.siblingsGroupId).toBe(byId.get('c2')?.siblingsGroupId)
       expect(byId.get('c1')?.siblingsGroupId).not.toBe(5)
       expect(byId.get('y')?.siblingsGroupId).toBe(5)
-    })
-
-    it('still deletes when the FileManager GC nudge is unavailable (service unmocked, throws by default)', async () => {
-      await seedMultiModelTree()
-      // Sanity: FileManager isn't in the default application mock, so the
-      // nudge's application.get('FileManager') call throws — the try/catch
-      // guard in MessageService.delete must swallow it.
-      expect(() => application.get('FileManager')).toThrow()
-
-      let result: ReturnType<typeof messageService.delete> | undefined
-      expect(() => {
-        result = messageService.delete('m-a2', false)
-      }).not.toThrow()
-
-      expect(result?.deletedIds).toEqual(['m-a2'])
     })
   })
 

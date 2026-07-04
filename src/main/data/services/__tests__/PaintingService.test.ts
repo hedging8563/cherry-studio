@@ -1,4 +1,3 @@
-import { application } from '@application'
 import { fileEntryTable } from '@data/db/schemas/file'
 import { paintingFileRefTable } from '@data/db/schemas/fileRelations'
 import { paintingTable } from '@data/db/schemas/painting'
@@ -340,17 +339,6 @@ describe('PaintingService', () => {
       const painting = paintingService.create(p({ providerId: 'aihubmix', prompt: 'd3' }))
 
       expect(paintingService.delete(painting.id)).toBeUndefined()
-      expect(await paintingExists(painting.id)).toBe(false)
-    })
-
-    it('still deletes when the FileManager GC nudge is unavailable (service unmocked, throws by default)', async () => {
-      const painting = paintingService.create(p({ providerId: 'aihubmix', prompt: 'nudge' }))
-      // Sanity: FileManager isn't in the default application mock, so the
-      // nudge's application.get('FileManager') call throws — the try/catch
-      // guard in PaintingService.delete must swallow it.
-      expect(() => application.get('FileManager')).toThrow()
-
-      expect(() => paintingService.delete(painting.id)).not.toThrow()
       expect(await paintingExists(painting.id)).toBe(false)
     })
   })

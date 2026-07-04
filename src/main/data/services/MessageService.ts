@@ -44,7 +44,6 @@ import { isToolUIPart } from 'ai'
 import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm'
 
 import { getDataService, registerDataService } from './dataServiceRegistry'
-import { nudgeFileEntryCleanup } from './utils/fileCleanupNudge'
 import { type SearchFetchContext, searchWithCursor } from './utils/ftsSearch'
 import { timestampToISO } from './utils/rowMappers'
 
@@ -1464,8 +1463,6 @@ export class MessageService {
       }
     })
 
-    nudgeFileEntryCleanup()
-
     return result
   }
 
@@ -1500,8 +1497,6 @@ export class MessageService {
       logger.info('Cleared topic messages', { topicId, count: deletedIds.length })
       return { deletedIds }
     })
-
-    nudgeFileEntryCleanup()
 
     return result
   }

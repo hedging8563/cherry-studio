@@ -926,7 +926,7 @@ interface IFileUploadService {
 
 ### 10.1 Positioning
 
-Orphan sweep is **explicitly triggered via the `File_RunSweep` IPC channel** — there is no startup auto-run for the FS-level pass (§10) or the DB-level report pass (§7 Layer 3). FileManager exposes a single `runSweep(params?: { confirmed?: boolean })` method for cleanup UI/caller-initiated flows: it first runs the entry-cleanup pass (auto-run separately on init/interval/delete-nudge — see [file-entry-cleanup.md §5](./file-entry-cleanup.md#5-cleanup-pass-reaper)), then runs the FS-level pass and the DB-level report pass concurrently, folding the cleanup pass's own summary into `counts.entryCleanup`, and returns a single `OrphanReport` once all three settle.
+Orphan sweep is **explicitly triggered via the `File_RunSweep` IPC channel** — there is no startup auto-run for the FS-level pass (§10) or the DB-level report pass (§7 Layer 3). FileManager exposes a single `runSweep(params?: { confirmed?: boolean })` method for cleanup UI/caller-initiated flows: it first runs the entry-cleanup pass (auto-run separately on init/interval — see [file-entry-cleanup.md §5](./file-entry-cleanup.md#5-cleanup-pass-reaper)), then runs the FS-level pass and the DB-level report pass concurrently, folding the cleanup pass's own summary into `counts.entryCleanup`, and returns a single `OrphanReport` once all three settle.
 
 ```typescript
 protected override async onInit(): Promise<void> {
@@ -935,9 +935,9 @@ protected override async onInit(): Promise<void> {
   await this.deps.danglingCache.initFromDb()
   // IPC handlers, including `File_RunSweep`, are registered here.
   this.registerIpcHandlers()
-  // Entry-cleanup pass auto-runs here (previous-session backlog), on a
-  // 30min idle-gated interval, and on a debounced delete-flow nudge —
-  // independently of `runSweep`. See file-entry-cleanup.md §5.5.
+  // Entry-cleanup pass auto-runs here (previous-session backlog) and on a
+  // 30min idle-gated interval — independently of `runSweep`. See
+  // file-entry-cleanup.md §5.5.
   void this.runEntryCleanup()
   this.registerInterval(() => this.entryCleanupTick(), FileManager.CLEANUP_INTERVAL_MS)
 }
@@ -1071,7 +1071,7 @@ Every sweep run emits one structured log record through `loggerService` — `inf
 
 The DB-side sweep emits a parallel record under `event: 'orphan-sweep'`. Its current outcomes are `completed` or `failed`: it prunes temp-session refs whose `file_entry` is missing, then reports `manual` entries with zero refs. The shared `partial` wire branch remains for compatibility, but there is no generic per-source checker pass.
 
-The entry-cleanup pass (§7.1, [file-entry-cleanup.md §5.6](./file-entry-cleanup.md#56-failure-handling--observability)) emits a third, independent record under `event: 'file-entry-cleanup'` — `info` on `completed`, `warn` on `aborted`, `error` on `failed` — covering candidate/deleted counts and skip/unlink-failure breakdowns for the `delete_when_unreferenced` reclaim path. It fires on its own triggers (init, idle-gated interval, delete-flow nudge) in addition to running as the first of `runSweep`'s three passes (§10.1).
+The entry-cleanup pass (§7.1, [file-entry-cleanup.md §5.6](./file-entry-cleanup.md#56-failure-handling--observability)) emits a third, independent record under `event: 'file-entry-cleanup'` — `info` on `completed`, `warn` on `aborted`, `error` on `failed` — covering candidate/deleted counts and skip/unlink-failure breakdowns for the `delete_when_unreferenced` reclaim path. It fires on its own triggers (init, idle-gated interval) in addition to running as the first of `runSweep`'s three passes (§10.1).
 
 These three records are the single source of truth for post-hoc diagnosis. No separate metrics pipeline is needed — at most three records per user-triggered sweep run is a trivial volume for log aggregation.
 

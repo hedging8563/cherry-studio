@@ -32,7 +32,6 @@ import type { Painting, PaintingFiles } from '@shared/data/types/painting'
 import type { SQL } from 'drizzle-orm'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 
-import { nudgeFileEntryCleanup } from './utils/fileCleanupNudge'
 import { asStringKey, decodeListCursor, encodeCursor, keysetOrdering } from './utils/keysetCursor'
 import { applyMoves, insertWithOrderKey } from './utils/orderKey'
 import { timestampToISO } from './utils/rowMappers'
@@ -276,8 +275,6 @@ class PaintingService {
       () => application.get('DbService').getDb().delete(paintingTable).where(eq(paintingTable.id, id)).run(),
       defaultHandlersFor('Painting', id)
     )
-
-    nudgeFileEntryCleanup()
 
     logger.info('Deleted painting', { id })
   }

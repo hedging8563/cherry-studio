@@ -661,10 +661,8 @@ export class FileManager extends BaseService implements IFileManager {
   private static readonly CLEANUP_INTERVAL_MS = 30 * 60 * 1000
   private static readonly CLEANUP_IDLE_THRESHOLD_S = 60
   private static readonly CLEANUP_MAX_DEFER_MS = 2 * 60 * 60 * 1000
-  private static readonly CLEANUP_NUDGE_DEBOUNCE_MS = 5_000
 
   private lastCleanupCompletedAt = 0
-  private cleanupNudgeTimer: NodeJS.Timeout | undefined
 
   protected override async onInit(): Promise<void> {
     await this.deps.danglingCache.initFromDb()
@@ -673,9 +671,6 @@ export class FileManager extends BaseService implements IFileManager {
     // Previous-session backlog (crashed sends, pre-upgrade leaks) — ungated.
     void this.runEntryCleanup()
     this.registerInterval(() => this.entryCleanupTick(), FileManager.CLEANUP_INTERVAL_MS)
-    this.registerDisposable(() => {
-      if (this.cleanupNudgeTimer !== undefined) clearTimeout(this.cleanupNudgeTimer)
-    })
   }
 
   /** Run one cleanup pass now. Never throws — failures land in the report. */
@@ -685,20 +680,6 @@ export class FileManager extends BaseService implements IFileManager {
       this.lastCleanupCompletedAt = Date.now()
     }
     return report
-  }
-
-  /**
-   * Debounced nudge for business delete flows — pure latency optimization
-   * (spec §5.5); the idle-gated interval is the reliability mechanism.
-   * Ungated: it fires right after a user-initiated delete.
-   */
-  scheduleCleanup(): void {
-    if (this.cleanupNudgeTimer !== undefined) return
-    this.cleanupNudgeTimer = setTimeout(() => {
-      this.cleanupNudgeTimer = undefined
-      void this.runEntryCleanup()
-    }, FileManager.CLEANUP_NUDGE_DEBOUNCE_MS)
-    this.cleanupNudgeTimer.unref()
   }
 
   /** Idle gate (spec §5.5): run only when idle ≥60s, with a 2h reliability floor. */

@@ -521,22 +521,6 @@ describe('TopicService', () => {
       // virtual root + message-1 both survive the rejected delete
       expect(await dbh.db.select().from(messageTable)).toHaveLength(2)
     })
-
-    it('still deletes when the FileManager GC nudge is unavailable (service unmocked, throws by default)', async () => {
-      await dbh.db.insert(topicTable).values([
-        { id: 'topic-nudge-1', name: 'Nudge 1', orderKey: 'a0', createdAt: 1, updatedAt: 1 },
-        { id: 'topic-nudge-2', name: 'Nudge 2', orderKey: 'a1', createdAt: 1, updatedAt: 1 }
-      ])
-      // Sanity: FileManager isn't in the default application mock, so the
-      // nudge's application.get('FileManager') call throws — the try/catch
-      // guard in TopicService.delete/deleteByIds must swallow it.
-      expect(() => application.get('FileManager')).toThrow()
-
-      expect(() => topicService.delete('topic-nudge-1')).not.toThrow()
-      expect(() => topicService.deleteByIds(['topic-nudge-2'])).not.toThrow()
-
-      expect(await dbh.db.select().from(topicTable)).toHaveLength(0)
-    })
   })
 
   describe('deleteByAssistantId', () => {
