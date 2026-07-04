@@ -92,6 +92,7 @@ import {
   transformMessage,
   transformTopic
 } from './mappings/ChatMappings'
+import { markEntriesAutoCleanup } from './markEntriesAutoCleanup'
 import { resolveModelReference } from './transformers/ModelTransformers'
 
 const logger = loggerService.withContext('ChatMigrator')
@@ -1100,13 +1101,10 @@ export class ChatMigrator extends BaseMigrator {
               .values(batchFileRefRows.slice(i, i + FILE_REF_INSERT_BATCH_SIZE))
               .run()
           }
-          const referencedIds = [...new Set(batchFileRefRows.map((row) => row.fileEntryId))]
-          for (let i = 0; i < referencedIds.length; i += FILE_REF_INSERT_BATCH_SIZE) {
-            tx.update(fileEntryTable)
-              .set({ cleanupPolicy: 'delete_when_unreferenced' })
-              .where(inArray(fileEntryTable.id, referencedIds.slice(i, i + FILE_REF_INSERT_BATCH_SIZE)))
-              .run()
-          }
+          markEntriesAutoCleanup(
+            tx,
+            batchFileRefRows.map((row) => row.fileEntryId)
+          )
         }
       })
 
