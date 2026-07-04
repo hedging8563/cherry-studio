@@ -44,6 +44,7 @@ import { isToolUIPart } from 'ai'
 import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm'
 
 import { getDataService, registerDataService } from './dataServiceRegistry'
+import { nudgeFileEntryCleanup } from './utils/fileCleanupNudge'
 import { type SearchFetchContext, searchWithCursor } from './utils/ftsSearch'
 import { timestampToISO } from './utils/rowMappers'
 
@@ -1463,13 +1464,7 @@ export class MessageService {
       }
     })
 
-    // Best-effort GC nudge — cleanup is owned by FileManager's interval;
-    // absence of the service (tests, shutdown) must never fail the delete.
-    try {
-      application.get('FileManager').scheduleCleanup()
-    } catch {
-      /* lifecycle unavailable — interval pass will cover it */
-    }
+    nudgeFileEntryCleanup()
 
     return result
   }
@@ -1506,13 +1501,7 @@ export class MessageService {
       return { deletedIds }
     })
 
-    // Best-effort GC nudge — cleanup is owned by FileManager's interval;
-    // absence of the service (tests, shutdown) must never fail the delete.
-    try {
-      application.get('FileManager').scheduleCleanup()
-    } catch {
-      /* lifecycle unavailable — interval pass will cover it */
-    }
+    nudgeFileEntryCleanup()
 
     return result
   }

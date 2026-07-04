@@ -32,6 +32,7 @@ import type { Painting, PaintingFiles } from '@shared/data/types/painting'
 import type { SQL } from 'drizzle-orm'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 
+import { nudgeFileEntryCleanup } from './utils/fileCleanupNudge'
 import { asStringKey, decodeListCursor, encodeCursor, keysetOrdering } from './utils/keysetCursor'
 import { applyMoves, insertWithOrderKey } from './utils/orderKey'
 import { timestampToISO } from './utils/rowMappers'
@@ -276,13 +277,7 @@ class PaintingService {
       defaultHandlersFor('Painting', id)
     )
 
-    // Best-effort GC nudge — cleanup is owned by FileManager's interval;
-    // absence of the service (tests, shutdown) must never fail the delete.
-    try {
-      application.get('FileManager').scheduleCleanup()
-    } catch {
-      /* lifecycle unavailable — interval pass will cover it */
-    }
+    nudgeFileEntryCleanup()
 
     logger.info('Deleted painting', { id })
   }

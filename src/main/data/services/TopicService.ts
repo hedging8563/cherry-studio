@@ -29,6 +29,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { getDataService, registerDataService } from './dataServiceRegistry'
 import { pinService } from './PinService'
 import { tagService } from './TagService'
+import { nudgeFileEntryCleanup } from './utils/fileCleanupNudge'
 import { applyMoves, insertWithOrderKey } from './utils/orderKey'
 import { nullsToUndefined, timestampToISO } from './utils/rowMappers'
 
@@ -330,13 +331,7 @@ export class TopicService {
     const dbService = application.get('DbService')
     dbService.withWriteTx((tx) => this.deleteManyByIdsTx(tx, [id], { requireAll: true }))
 
-    // Best-effort GC nudge — cleanup is owned by FileManager's interval;
-    // absence of the service (tests, shutdown) must never fail the delete.
-    try {
-      application.get('FileManager').scheduleCleanup()
-    } catch {
-      /* lifecycle unavailable — interval pass will cover it */
-    }
+    nudgeFileEntryCleanup()
 
     logger.info('Deleted topic', { id })
   }
@@ -345,13 +340,7 @@ export class TopicService {
     const dbService = application.get('DbService')
     const deletedIds = dbService.withWriteTx((tx) => this.deleteManyByIdsTx(tx, ids, { requireAll: true }))
 
-    // Best-effort GC nudge — cleanup is owned by FileManager's interval;
-    // absence of the service (tests, shutdown) must never fail the delete.
-    try {
-      application.get('FileManager').scheduleCleanup()
-    } catch {
-      /* lifecycle unavailable — interval pass will cover it */
-    }
+    nudgeFileEntryCleanup()
 
     logger.info('Deleted topics', { count: deletedIds.length })
 

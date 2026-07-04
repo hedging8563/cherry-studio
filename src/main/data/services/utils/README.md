@@ -170,6 +170,17 @@ regex revalidation, bounded offset scanning, and next-cursor assembly.
   in `@shared/data/types/message`; this generic utility does not know message
   roles.
 
+### `fileCleanupNudge.ts` — best-effort file-entry GC nudge
+
+#### `nudgeFileEntryCleanup(): void`
+
+Call after a business delete flow that may have dropped the last persistent ref to a file entry (topic / message / painting deletes). Delegates to `FileManager.scheduleCleanup()` via the lifecycle container.
+
+**Design boundaries:**
+
+- **Never throws**: cleanup is owned by FileManager's idle-gated interval; the nudge only shortens latency, so an unavailable FileManager (tests, shutdown) logs a warning and returns — it must never fail the caller's delete.
+- **Container lookup, not import**: reaches FileManager through `application.get` so the data layer takes no module dependency on `src/main/services`.
+
 ## Criteria for Adding a New Utility
 
 Before adding a new utility to this directory, confirm:
