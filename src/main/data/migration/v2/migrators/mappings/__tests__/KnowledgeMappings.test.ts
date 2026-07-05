@@ -2,6 +2,7 @@ import { FILE_TYPE } from '@shared/data/types/file'
 import {
   KNOWLEDGE_BASE_ERROR_MISSING_EMBEDDING_MODEL,
   KNOWLEDGE_ITEM_ERROR_DIRECTORY_NOT_MIGRATED,
+  KNOWLEDGE_ITEM_ERROR_NEVER_INDEXED,
   KNOWLEDGE_NOTE_CONTENT_MAX
 } from '@shared/data/types/knowledge'
 import { describe, expect, it } from 'vitest'
@@ -42,13 +43,13 @@ describe('KnowledgeMappings', () => {
     expect(legacyModelToUniqueId({ id: 'silicon::BAAI/bge-m3', provider: 'silicon' })).toBe('silicon::BAAI/bge-m3')
   })
 
-  it('inferKnowledgeItemStatus maps legacy transient states to failed', () => {
+  it('inferKnowledgeItemStatus maps legacy transient and never-indexed states to failed', () => {
     expect(inferKnowledgeItemStatus({ uniqueId: 'loader-1' } as any)).toBe('completed')
-    expect(inferKnowledgeItemStatus({ uniqueId: '   ' } as any)).toBe('idle')
+    expect(inferKnowledgeItemStatus({ uniqueId: '   ' } as any)).toBe('failed')
     expect(inferKnowledgeItemStatus({ processingStatus: 'pending' } as any)).toBe('failed')
     expect(inferKnowledgeItemStatus({ processingStatus: 'processing' } as any)).toBe('failed')
     expect(inferKnowledgeItemStatus({ processingStatus: 'failed', uniqueId: 'loader-1' } as any)).toBe('failed')
-    expect(inferKnowledgeItemStatus({} as any)).toBe('idle')
+    expect(inferKnowledgeItemStatus({} as any)).toBe('failed')
   })
 
   it('transformKnowledgeBase marks knowledge bases without an embedding model as failed', () => {
@@ -281,8 +282,8 @@ describe('KnowledgeMappings', () => {
           source: 'https://dexie.example.com',
           content: 'dexie-content'
         },
-        status: 'idle',
-        error: null,
+        status: 'failed',
+        error: KNOWLEDGE_ITEM_ERROR_NEVER_INDEXED,
         createdAt: expect.any(Number),
         updatedAt: expect.any(Number)
       }
@@ -514,13 +515,13 @@ describe('KnowledgeMappings', () => {
     expect(warnings[0]).toContain('blank v1 filename')
   })
 
-  it('transformKnowledgeItem clears blank legacy processing errors for idle and completed items', () => {
-    const idleResult = transformKnowledgeItem(
+  it('transformKnowledgeItem marks a never-started item never_indexed (ignoring any stale processing error) and clears blank legacy processing errors for completed items', () => {
+    const neverIndexedResult = transformKnowledgeItem(
       'kb-1',
       {
-        id: 'idle-note',
+        id: 'never-indexed-note',
         type: 'note',
-        content: 'idle note',
+        content: 'never indexed note',
         processingError: ''
       },
       {
@@ -543,11 +544,11 @@ describe('KnowledgeMappings', () => {
       }
     )
 
-    expect(idleResult).toStrictEqual({
+    expect(neverIndexedResult).toStrictEqual({
       ok: true,
       value: expect.objectContaining({
-        status: 'idle',
-        error: null
+        status: 'failed',
+        error: KNOWLEDGE_ITEM_ERROR_NEVER_INDEXED
       })
     })
     expect(completedResult).toStrictEqual({
@@ -651,7 +652,7 @@ describe('KnowledgeMappings', () => {
     })
   })
 
-  it('transformKnowledgeItem maps directory items to v2 directory node data', () => {
+  it('transformKnowledgeItem maps a never-indexed directory to v2 directory node data, marked never_indexed', () => {
     const result = transformKnowledgeItem(
       'kb-1',
       {
@@ -675,8 +676,8 @@ describe('KnowledgeMappings', () => {
         data: {
           source: '/tmp/docs'
         },
-        status: 'idle',
-        error: null,
+        status: 'failed',
+        error: KNOWLEDGE_ITEM_ERROR_NEVER_INDEXED,
         createdAt: expect.any(Number),
         updatedAt: expect.any(Number)
       }

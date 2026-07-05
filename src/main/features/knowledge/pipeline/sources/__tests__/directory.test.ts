@@ -71,7 +71,7 @@ describe('expandDirectoryOwnerToTree', () => {
         data: {
           source: rootDir
         },
-        status: 'idle',
+        status: 'processing',
         error: null,
         createdAt: '2026-04-08T00:00:00.000Z',
         updatedAt: '2026-04-08T00:00:00.000Z'
@@ -124,7 +124,7 @@ describe('expandDirectoryOwnerToTree', () => {
         data: {
           source: rootDir
         },
-        status: 'idle',
+        status: 'processing',
         error: null,
         createdAt: '2026-04-08T00:00:00.000Z',
         updatedAt: '2026-04-08T00:00:00.000Z'
@@ -189,7 +189,7 @@ describe('expandDirectoryOwnerToTree', () => {
         data: {
           source: rootDir
         },
-        status: 'idle',
+        status: 'processing',
         error: null,
         createdAt: '2026-04-08T00:00:00.000Z',
         updatedAt: '2026-04-08T00:00:00.000Z'
@@ -236,7 +236,7 @@ describe('expandDirectoryOwnerToTree', () => {
         data: {
           source: rootDir
         },
-        status: 'idle',
+        status: 'processing',
         error: null,
         createdAt: '2026-04-08T00:00:00.000Z',
         updatedAt: '2026-04-08T00:00:00.000Z'
@@ -269,7 +269,7 @@ describe('expandDirectoryOwnerToTree', () => {
         data: {
           source: rootDir
         },
-        status: 'idle',
+        status: 'processing',
         error: null,
         createdAt: '2026-04-08T00:00:00.000Z',
         updatedAt: '2026-04-08T00:00:00.000Z'
@@ -309,7 +309,7 @@ describe('expandDirectoryOwnerToTree', () => {
         data: {
           source: rootDir
         },
-        status: 'idle',
+        status: 'processing',
         error: null,
         createdAt: '2026-04-08T00:00:00.000Z',
         updatedAt: '2026-04-08T00:00:00.000Z'
@@ -358,7 +358,7 @@ describe('expandDirectoryOwnerToTree', () => {
           data: {
             source: rootDir
           },
-          status: 'idle',
+          status: 'processing',
           error: null,
           createdAt: '2026-04-08T00:00:00.000Z',
           updatedAt: '2026-04-08T00:00:00.000Z'
@@ -389,7 +389,7 @@ describe('expandDirectoryOwnerToTree', () => {
           data: {
             source: tempRoot
           },
-          status: 'idle',
+          status: 'processing',
           error: null,
           createdAt: '2026-04-08T00:00:00.000Z',
           updatedAt: '2026-04-08T00:00:00.000Z'
