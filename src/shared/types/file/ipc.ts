@@ -82,6 +82,19 @@ export interface ReadResult<T> {
  * UX names, where the caller has a legitimate choice).
  *
  * See `file-arch-problems-response.md` for the full rationale (extension of A-7).
+ *
+ * TODO(file-ipc types): this union hand-mirrors `createInternalEntryInputSchema`
+ * (`src/shared/ipc/schemas/file.ts`) and so re-declares the shared `cleanupPolicy`
+ * per branch. It can't simply become `z.infer<typeof createInternalEntryInputSchema>`
+ * today: the schema fields infer to plain `string` (`z.string()`/`z.url()`/refine
+ * don't narrow), whereas `path`/`url`/`data` here carry the template-literal brands
+ * `FilePath`/`UrlString`/`Base64String` — so inferring would silently widen and drop
+ * the brands. The cascade fix is to make the schemas *produce* those brands (e.g.
+ * `AbsolutePathSchema` → `.transform((s) => s as FilePath)`, branded url/base64
+ * outputs); then `z.infer` equals this type, the base `cleanupPolicy` lives in one
+ * place, and this hand-written union can be deleted. Deferred to the File IPC → IpcApi
+ * migration (see the matching TODO in `schemas/file.ts`). Until then, keep the two in
+ * sync by hand.
  */
 export type CreateInternalEntryIpcParams =
   | {
