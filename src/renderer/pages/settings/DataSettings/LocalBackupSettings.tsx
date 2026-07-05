@@ -21,6 +21,7 @@ import { FolderOpen, RefreshCw, Save, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { BackupV2DevExport } from './BackupV2DevExport'
 const logger = loggerService.withContext('LocalBackupSettings')
 
 const LocalBackupSettings: React.FC = () => {
@@ -297,6 +298,7 @@ const LocalBackupSettings: React.FC = () => {
           localBackupDir={resolvedLocalBackupDir}
         />
       </>
+      {import.meta.env.DEV && <BackupV2DevExport />}
     </SettingGroup>
   )
 }
