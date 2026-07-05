@@ -1,10 +1,8 @@
 /**
- * File API Handlers.
+ * File API Handlers — read-only DataApi surface.
  *
- * All read endpoints plus the single side-effect-free mutation: the entry
- * PATCH flips `cleanupPolicy` (a pure SQL column update). Every other write
- * operation lives on File IPC (FileManager) because it touches the
- * filesystem; ref writes are called directly by business services via
+ * Mutations are intentionally absent: write operations live on File IPC
+ * (FileManager); ref writes are called directly by business services via
  * fileRefService.
  *
  * DataApi boundary rule (CLAUDE.md / docs/references/data/api-design-guidelines.md):
@@ -22,8 +20,7 @@ import {
   type FileSchemas,
   ListFilesQuerySchema,
   RefCountsQuerySchema,
-  RefsBySourceQuerySchema,
-  UpdateFileEntrySchema
+  RefsBySourceQuerySchema
 } from '@shared/data/api/schemas/files'
 import { FileEntryIdSchema } from '@shared/data/types/file'
 
@@ -39,12 +36,6 @@ export const fileHandlers: HandlersFor<FileSchemas> = {
     GET: async ({ params }) => {
       const id = FileEntryIdSchema.parse(params.id)
       return fileEntryService.getById(id)
-    },
-
-    PATCH: async ({ params, body }) => {
-      const id = FileEntryIdSchema.parse(params.id)
-      const dto = UpdateFileEntrySchema.parse(body)
-      return fileEntryService.update(id, dto)
     }
   },
 
