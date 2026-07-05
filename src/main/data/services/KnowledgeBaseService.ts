@@ -7,7 +7,7 @@
 import { application } from '@application'
 import { knowledgeBaseTable, knowledgeItemTable } from '@data/db/schemas/knowledge'
 import { loggerService } from '@logger'
-import { DataApiErrorFactory } from '@shared/data/api'
+import { DataApiErrorFactory, toDataApiError } from '@shared/data/api'
 import type { OffsetPaginationResponse } from '@shared/data/api/apiTypes'
 import type {
   KnowledgeBaseListItem,
@@ -24,7 +24,8 @@ import {
   DEFAULT_KNOWLEDGE_CHUNK_STRATEGY,
   DEFAULT_KNOWLEDGE_SEARCH_MODE,
   type KnowledgeBase,
-  KnowledgeBaseSchema
+  KnowledgeBaseSchema,
+  KnowledgeBaseWriteSchema
 } from '@shared/data/types/knowledge'
 import { and, asc, count as sqlCount, desc, eq, gte, ne, type SQL, sql } from 'drizzle-orm'
 
@@ -34,63 +35,6 @@ const logger = loggerService.withContext('DataApi:KnowledgeBaseService')
 
 type KnowledgeBaseRow = typeof knowledgeBaseTable.$inferSelect
 type KnowledgeBaseEntitySearchItem = Extract<EntitySearchItem, { type: 'knowledge-base' }>
-
-function validateKnowledgeBaseConfig(config: {
-  chunkSize: number
-  chunkOverlap: number
-  chunkStrategy?: string | null
-  chunkSeparator?: string | null
-  searchMode?: string | null
-  hybridAlpha?: number | null
-}): Record<string, string[]> {
-  const fieldErrors: Record<string, string[]> = {}
-
-  if (config.chunkOverlap >= config.chunkSize) {
-    fieldErrors.chunkOverlap = ['Chunk overlap must be smaller than chunk size']
-  }
-
-  if (config.chunkStrategy === 'delimiter' && !config.chunkSeparator) {
-    fieldErrors.chunkSeparator = ['Separator is required when chunk strategy is delimiter']
-  }
-
-  if (config.hybridAlpha != null && config.searchMode !== 'hybrid') {
-    fieldErrors.hybridAlpha = ['Hybrid alpha requires hybrid search mode']
-  }
-
-  return fieldErrors
-}
-
-// Vector and hybrid retrieval need an embedding model; without one a base is
-// BM25-only and cannot run a non-bm25 search mode. Mirrors the `completed`-only
-// gate in `KnowledgeBaseSchema.superRefine`: a failed base's leftover searchMode
-// isn't governed by this invariant until it goes through restore, so callers
-// must only apply it to a base that is (or will become) completed. Only
-// update() calls this: create() always coerces searchMode to 'bm25' up front
-// when there is no model, so the invariant already holds by construction there.
-function validateSearchModeNeedsEmbedding(
-  embeddingModelId: string | null,
-  searchMode: string | null | undefined
-): Record<string, string[]> {
-  if (embeddingModelId == null && searchMode != null && searchMode !== 'bm25') {
-    return { searchMode: ['A knowledge base without an embedding model can only use bm25 search'] }
-  }
-  return {}
-}
-
-// The vector arm of the DB CHECK requires a positive dimensions alongside the model;
-// a no-model base always persists a null dimensions regardless of what is passed. The
-// IPC boundary already rejects a model without dimensions via CreateKnowledgeBaseSchema's
-// refine, so this guards internal callers (e.g. restoreBase) that build a DTO directly,
-// before the write reaches the DB CHECK as an untranslated constraint violation.
-function validateDimensionsForEmbeddingModel(
-  embeddingModelId: string | null,
-  dimensions: number | null | undefined
-): Record<string, string[]> {
-  if (embeddingModelId != null && !(typeof dimensions === 'number' && Number.isInteger(dimensions) && dimensions > 0)) {
-    return { dimensions: ['A knowledge base with an embedding model requires positive dimensions'] }
-  }
-  return {}
-}
 
 function rowToKnowledgeBase(row: KnowledgeBaseRow): KnowledgeBase {
   const clean = nullsToUndefined(row)
@@ -223,17 +167,6 @@ export class KnowledgeBaseService {
       searchMode: usesEmbeddings ? (dto.searchMode ?? DEFAULT_KNOWLEDGE_SEARCH_MODE) : 'bm25',
       hybridAlpha: usesEmbeddings ? dto.hybridAlpha : undefined
     }
-    const createFieldErrors = {
-      // Validated against the raw dto.hybridAlpha, not the coerced createConfig value
-      // below, so an explicit hybridAlpha on a no-model base is rejected instead of
-      // silently discarded — create() and update() reject the same input shape.
-      ...validateKnowledgeBaseConfig({ ...createConfig, hybridAlpha: dto.hybridAlpha }),
-      ...validateDimensionsForEmbeddingModel(embeddingModelId, dto.dimensions)
-    }
-    if (Object.keys(createFieldErrors).length > 0) {
-      throw DataApiErrorFactory.validation(createFieldErrors)
-    }
-
     const createValues: Omit<typeof knowledgeBaseTable.$inferInsert, 'id' | 'createdAt' | 'updatedAt'> = {
       name: dto.name.trim(),
       groupId: dto.groupId ?? null,
@@ -251,6 +184,20 @@ export class KnowledgeBaseService {
       documentCount: dto.documentCount ?? null,
       searchMode: createConfig.searchMode,
       hybridAlpha: createConfig.hybridAlpha ?? null
+    }
+
+    // Validated against the raw dto.hybridAlpha, not the coerced createValues value,
+    // so an explicit hybridAlpha on a no-model base is rejected instead of silently
+    // discarded — create() and update() reject the same input shape.
+    const createCandidate = {
+      ...createValues,
+      hybridAlpha: dto.hybridAlpha ?? undefined,
+      threshold: createValues.threshold ?? undefined,
+      documentCount: createValues.documentCount ?? undefined
+    }
+    const createValidation = KnowledgeBaseWriteSchema.safeParse(createCandidate)
+    if (!createValidation.success) {
+      throw toDataApiError(createValidation.error, 'create knowledge base')
     }
 
     const db = application.get('DbService').getDb()
@@ -307,19 +254,30 @@ export class KnowledgeBaseService {
       nextConfig.hybridAlpha = null
     }
 
-    // Only a completed base is governed by the no-model=>bm25 invariant (mirrors
-    // KnowledgeBaseSchema.superRefine's own completed-only gate): a failed base
-    // may carry a leftover incompatible searchMode from before it failed/migrated,
-    // and metadata-only updates (rename, move group) must not be blocked by it.
-    const updateFieldErrors = {
-      ...validateKnowledgeBaseConfig(nextConfig),
-      ...validateDimensionsForEmbeddingModel(nextEmbeddingModelId, nextDimensions),
-      ...(existing.status === 'completed'
-        ? validateSearchModeNeedsEmbedding(nextEmbeddingModelId, nextConfig.searchMode)
-        : {})
+    // Validate the merged next-state (existing row + this PATCH) against the same
+    // invariants as the read schema — a failed base's leftover-incompatible pairing
+    // or searchMode isn't governed by these invariants until it goes through
+    // restore, so metadata-only updates (rename, move group) must not be blocked by
+    // them; that gating lives inside `refineKnowledgeBaseInvariants` itself (only
+    // enforced when `status === 'completed'`).
+    const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...existingConfig } = existing
+    void _id // Intentionally unused - excluding id/createdAt/updatedAt from the write candidate
+    void _createdAt
+    void _updatedAt
+    const updateCandidate = {
+      ...existingConfig,
+      embeddingModelId: nextEmbeddingModelId,
+      dimensions: nextDimensions,
+      chunkSize: nextConfig.chunkSize,
+      chunkOverlap: nextConfig.chunkOverlap,
+      chunkStrategy: nextConfig.chunkStrategy,
+      chunkSeparator: nextConfig.chunkSeparator,
+      searchMode: nextConfig.searchMode,
+      hybridAlpha: nextConfig.hybridAlpha ?? undefined
     }
-    if (Object.keys(updateFieldErrors).length > 0) {
-      throw DataApiErrorFactory.validation(updateFieldErrors)
+    const updateValidation = KnowledgeBaseWriteSchema.safeParse(updateCandidate)
+    if (!updateValidation.success) {
+      throw toDataApiError(updateValidation.error, 'update knowledge base')
     }
 
     const updates: Partial<typeof knowledgeBaseTable.$inferInsert> = {}
