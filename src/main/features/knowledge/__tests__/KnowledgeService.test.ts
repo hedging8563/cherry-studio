@@ -18,6 +18,7 @@ const {
   getIndexStoreMock,
   deleteStoreMock,
   enqueueMock,
+  enqueueTxMock,
   fileProcessingStartJobMock,
   getJobMock,
   aiEmbedManyMock,
@@ -35,6 +36,7 @@ const {
   knowledgeItemGetRootItemsByBaseIdMock,
   knowledgeItemGetSubtreeItemsMock,
   knowledgeItemSetSubtreeStatusMock,
+  knowledgeItemSetSubtreeStatusTxMock,
   knowledgeItemUpdateStatusMock,
   listMock,
   registerHandlerMock,
@@ -55,6 +57,7 @@ const {
   getIndexStoreMock: vi.fn(),
   deleteStoreMock: vi.fn(),
   enqueueMock: vi.fn(),
+  enqueueTxMock: vi.fn(),
   fileProcessingStartJobMock: vi.fn(),
   getJobMock: vi.fn(),
   aiEmbedManyMock: vi.fn(),
@@ -72,6 +75,7 @@ const {
   knowledgeItemGetRootItemsByBaseIdMock: vi.fn(),
   knowledgeItemGetSubtreeItemsMock: vi.fn(),
   knowledgeItemSetSubtreeStatusMock: vi.fn(),
+  knowledgeItemSetSubtreeStatusTxMock: vi.fn(),
   knowledgeItemUpdateStatusMock: vi.fn(),
   listMock: vi.fn(),
   registerHandlerMock: vi.fn(),
@@ -98,6 +102,7 @@ vi.mock('@application', async () => {
       cancel: cancelMock,
       cancelMany: cancelManyMock,
       enqueue: enqueueMock,
+      enqueueTx: enqueueTxMock,
       get: getJobMock,
       list: listMock,
       registerHandler: registerHandlerMock
@@ -166,6 +171,7 @@ vi.mock('@data/services/KnowledgeItemService', () => ({
     getOutermostSelectedItemIds: knowledgeItemGetOutermostSelectedItemIdsMock,
     getRootItemsByBaseId: knowledgeItemGetRootItemsByBaseIdMock,
     setSubtreeStatus: knowledgeItemSetSubtreeStatusMock,
+    setSubtreeStatusTx: knowledgeItemSetSubtreeStatusTxMock,
     updateStatus: knowledgeItemUpdateStatusMock
   }
 }))
@@ -358,10 +364,12 @@ describe('KnowledgeService', () => {
       }
     )
     knowledgeItemSetSubtreeStatusMock.mockReturnValue(['note-1'])
+    knowledgeItemSetSubtreeStatusTxMock.mockReturnValue(['note-1'])
     knowledgeItemUpdateStatusMock.mockImplementation((id: string, status: KnowledgeItemOf<'note'>['status']) => {
       return createNoteItem(id, createdItemBaseIds.get(id) ?? 'kb-1', null, status)
     })
     enqueueMock.mockReturnValue({ id: 'job-1', snapshot: {}, finished: Promise.resolve({}) })
+    enqueueTxMock.mockReturnValue({ id: 'job-1', snapshot: {}, finished: Promise.resolve({}) })
     fileProcessingStartJobMock.mockResolvedValue({ id: 'fp-job-1', snapshot: {}, finished: Promise.resolve({}) })
     getJobMock.mockResolvedValue(null)
     listMock.mockResolvedValue([])
@@ -1006,10 +1014,10 @@ describe('KnowledgeService', () => {
 
     expect(enqueueMock.mock.calls.map((call) => call[0])).toEqual([
       'knowledge.index-documents',
-      'knowledge.delete-subtree',
       'knowledge.reindex-subtree'
     ])
-    expect(knowledgeItemSetSubtreeStatusMock).toHaveBeenCalledWith('kb-1', ['note-1'], 'deleting')
+    expect(enqueueTxMock.mock.calls.map((call) => call[1])).toEqual(['knowledge.delete-subtree'])
+    expect(knowledgeItemSetSubtreeStatusTxMock).toHaveBeenCalledWith(expect.anything(), 'kb-1', ['note-1'], 'deleting')
   })
 
   it('starts file processing and schedules a check job for supported document files when the base has a processor', async () => {
@@ -1537,18 +1545,17 @@ describe('KnowledgeService', () => {
     expect(deleteKnowledgeItemFilesBestEffortMock).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps items deleting when delete cleanup enqueue fails', async () => {
+  it('runs delete marking and enqueue inside one transaction', async () => {
     const service = new KnowledgeService()
     knowledgeItemGetByIdMock.mockReturnValue(createNoteItem('note-1'))
-    enqueueMock.mockImplementationOnce(() => {
+    enqueueTxMock.mockImplementationOnce(() => {
       throw new Error('enqueue failed')
     })
 
     await expect(service.deleteItems('kb-1', ['note-1'])).rejects.toThrow('enqueue failed')
 
-    expect(knowledgeItemSetSubtreeStatusMock).toHaveBeenCalledWith('kb-1', ['note-1'], 'deleting')
-    expect(knowledgeItemSetSubtreeStatusMock).not.toHaveBeenCalledWith('kb-1', ['note-1'], 'failed', expect.anything())
-    expect(enqueueMock).toHaveBeenCalledTimes(1)
+    expect(knowledgeItemSetSubtreeStatusTxMock).toHaveBeenCalledWith(expect.anything(), 'kb-1', ['note-1'], 'deleting')
+    expect(enqueueTxMock).toHaveBeenCalledTimes(1)
   })
 
   it('collapses nested delete and reindex inputs to top-level roots', async () => {
@@ -1562,14 +1569,15 @@ describe('KnowledgeService', () => {
     expect(knowledgeItemGetOutermostSelectedItemIdsMock).toHaveBeenNthCalledWith(1, 'kb-1', ['dir-1', 'note-1'])
     expect(knowledgeItemGetOutermostSelectedItemIdsMock).toHaveBeenNthCalledWith(2, 'kb-1', ['dir-1', 'note-1'])
 
-    expect(enqueueMock).toHaveBeenNthCalledWith(
+    expect(enqueueTxMock).toHaveBeenNthCalledWith(
       1,
+      expect.anything(),
       'knowledge.delete-subtree',
       { baseId: 'kb-1', rootItemIds: ['dir-1'] },
       expect.any(Object)
     )
     expect(enqueueMock).toHaveBeenNthCalledWith(
-      2,
+      1,
       'knowledge.reindex-subtree',
       { baseId: 'kb-1', rootItemIds: ['dir-1'] },
       expect.any(Object)
@@ -2161,7 +2169,12 @@ describe('KnowledgeService', () => {
 
       expect(getMaterialByRelativePathMock).toHaveBeenCalledWith(CONCEPT_ID)
       expect(knowledgeItemGetOutermostSelectedItemIdsMock).toHaveBeenCalledWith('kb-1', [NOTE_ITEM_ID])
-      expect(knowledgeItemSetSubtreeStatusMock).toHaveBeenCalledWith('kb-1', [NOTE_ITEM_ID], 'deleting')
+      expect(knowledgeItemSetSubtreeStatusTxMock).toHaveBeenCalledWith(
+        expect.anything(),
+        'kb-1',
+        [NOTE_ITEM_ID],
+        'deleting'
+      )
       expect(result).toEqual({ applied: [CONCEPT_ID], notFound: [] })
     })
 
@@ -2181,7 +2194,7 @@ describe('KnowledgeService', () => {
       const result = await service.deleteConcepts('kb-1', [CONCEPT_ID])
 
       expect(result).toEqual({ applied: [], notFound: [CONCEPT_ID] })
-      expect(knowledgeItemSetSubtreeStatusMock).not.toHaveBeenCalled()
+      expect(knowledgeItemSetSubtreeStatusTxMock).not.toHaveBeenCalled()
     })
 
     it('collapses duplicate Concept IDs to a single resolution', async () => {
@@ -2200,7 +2213,7 @@ describe('KnowledgeService', () => {
       const result = await service.deleteConcepts('kb-1', ['docs/missing.md'])
 
       expect(result).toEqual({ applied: [], notFound: ['docs/missing.md'] })
-      expect(enqueueMock).not.toHaveBeenCalled()
+      expect(enqueueTxMock).not.toHaveBeenCalled()
     })
   })
 
