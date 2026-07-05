@@ -190,24 +190,6 @@ export const FileList = memo(function FileList({
               <span className="w-[55px] shrink-0 text-muted-foreground/50 text-xs">{getFormatLabel(file.format)}</span>
               <span className="w-[110px] shrink-0 text-muted-foreground/50 text-xs">{file.updatedAt}</span>
               <div className="grid w-[145px] shrink-0 grid-cols-5 justify-items-center gap-0.5">
-                {canPin ? (
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={isPinned ? t('files.unpin') : t('files.pin')}
-                    title={isPinned ? t('files.unpin') : t('files.pin')}
-                    className={
-                      isPinned ? 'text-primary hover:text-primary' : 'text-muted-foreground/55 hover:text-foreground'
-                    }
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      menuActions.onTogglePin(file.id, !isPinned)
-                    }}>
-                    <Pin size={12} className={isPinned ? 'fill-current' : ''} />
-                  </Button>
-                ) : (
-                  renderActionPlaceholder('pin')
-                )}
                 {canOpen ? (
                   <Button
                     variant="ghost"
@@ -268,6 +250,24 @@ export const FileList = memo(function FileList({
                   </Button>
                 ) : (
                   renderActionPlaceholder('location')
+                )}
+                {canPin ? (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={isPinned ? t('files.unpin') : t('files.pin')}
+                    title={isPinned ? t('files.unpin') : t('files.pin')}
+                    className={
+                      isPinned ? 'text-primary hover:text-primary' : 'text-muted-foreground/55 hover:text-foreground'
+                    }
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      menuActions.onTogglePin(file.id, !isPinned)
+                    }}>
+                    <Pin size={12} className={isPinned ? 'fill-current' : ''} />
+                  </Button>
+                ) : (
+                  renderActionPlaceholder('pin')
                 )}
                 <Button
                   variant="ghost"
