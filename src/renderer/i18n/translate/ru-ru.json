@@ -2068,6 +2068,7 @@
     "generate_random_seed": "Сгенерировать случайное зерно",
     "get_embedding_dimension": "Получить размерность вложения",
     "go_to_settings": "Перейти в настройки",
+    "help": "[to be translated]:Help",
     "html_preview": "Предпросмотр HTML",
     "i_know": "Я понял",
     "ignore": "Игнорировать",
@@ -2318,14 +2319,6 @@
     "audio": "Аудио",
     "batch_delete": "массовое удаление",
     "batch_operation": "Выделить всё",
-    "cleanup": {
-      "confirm_content": "[to be translated]:Permanently delete auto-managed files that no chat or painting still references. Files you pinned to the library are kept.",
-      "confirm_ok": "[to be translated]:Clean up",
-      "confirm_title": "[to be translated]:Clean up unreferenced files?",
-      "done": "[to be translated]:Cleaned up {{count}} file(s)",
-      "failed": "[to be translated]:Cleanup failed",
-      "label": "[to be translated]:Clean up unreferenced files"
-    },
     "count": "файлов",
     "created_at": "Дата создания",
     "delete": {
@@ -2371,8 +2364,6 @@
       "description": "Это навсегда удалит {{count}} файл(ов). Это действие нельзя отменить.",
       "title": "Удалить файлы навсегда?"
     },
-    "pin": "[to be translated]:Pin to library",
-    "pin_failed": "[to be translated]:Failed to update the file",
     "preview": {
       "error": "Не удалось открыть файл"
     },
@@ -2390,7 +2381,6 @@
     "title": "Файлы",
     "trash": "Мусор",
     "type": "Тип",
-    "unpin": "[to be translated]:Unpin from library",
     "upload": "[to be translated]:Upload files",
     "video": "Видео"
   },

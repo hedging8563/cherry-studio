@@ -2068,6 +2068,7 @@
     "generate_random_seed": "Generează sămânță aleatoare",
     "get_embedding_dimension": "Obține dimensiunea de înglobare",
     "go_to_settings": "Mergi la setări",
+    "help": "[to be translated]:Help",
     "html_preview": "Previzualizare HTML",
     "i_know": "Am înțeles",
     "ignore": "Ignoră",
@@ -2318,14 +2319,6 @@
     "audio": "Audio",
     "batch_delete": "Ștergere în lot",
     "batch_operation": "Selectează tot",
-    "cleanup": {
-      "confirm_content": "[to be translated]:Permanently delete auto-managed files that no chat or painting still references. Files you pinned to the library are kept.",
-      "confirm_ok": "[to be translated]:Clean up",
-      "confirm_title": "[to be translated]:Clean up unreferenced files?",
-      "done": "[to be translated]:Cleaned up {{count}} file(s)",
-      "failed": "[to be translated]:Cleanup failed",
-      "label": "[to be translated]:Clean up unreferenced files"
-    },
     "count": "fișiere",
     "created_at": "Creat la",
     "delete": {
@@ -2371,8 +2364,6 @@
       "description": "Aceasta va elimina permanent {{count}} fișier(e). Această acțiune nu poate fi anulată.",
       "title": "Șterge permanent fișierele?"
     },
-    "pin": "[to be translated]:Pin to library",
-    "pin_failed": "[to be translated]:Failed to update the file",
     "preview": {
       "error": "Nu s-a putut deschide fișierul"
     },
@@ -2390,7 +2381,6 @@
     "title": "Fișiere",
     "trash": "Gunoi",
     "type": "Tip",
-    "unpin": "[to be translated]:Unpin from library",
     "upload": "[to be translated]:Upload files",
     "video": "Video"
   },

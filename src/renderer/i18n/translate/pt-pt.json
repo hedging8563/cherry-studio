@@ -2068,6 +2068,7 @@
     "generate_random_seed": "Gerar semente aleatória",
     "get_embedding_dimension": "Obter dimensão de incorporação",
     "go_to_settings": "Ir para configurações",
+    "help": "[to be translated]:Help",
     "html_preview": "Pré-visualização em HTML",
     "i_know": "Entendi",
     "ignore": "Pular",
@@ -2318,14 +2319,6 @@
     "audio": "Áudio",
     "batch_delete": "excluir em massa",
     "batch_operation": "Selecionar tudo",
-    "cleanup": {
-      "confirm_content": "[to be translated]:Permanently delete auto-managed files that no chat or painting still references. Files you pinned to the library are kept.",
-      "confirm_ok": "[to be translated]:Clean up",
-      "confirm_title": "[to be translated]:Clean up unreferenced files?",
-      "done": "[to be translated]:Cleaned up {{count}} file(s)",
-      "failed": "[to be translated]:Cleanup failed",
-      "label": "[to be translated]:Clean up unreferenced files"
-    },
     "count": "Número de Arquivos",
     "created_at": "Data de Criação",
     "delete": {
@@ -2371,8 +2364,6 @@
       "description": "Isso removerá permanentemente {{count}} arquivo(s). Esta ação não pode ser desfeita.",
       "title": "Excluir arquivos permanentemente?"
     },
-    "pin": "[to be translated]:Pin to library",
-    "pin_failed": "[to be translated]:Failed to update the file",
     "preview": {
       "error": "Falha ao abrir o arquivo"
     },
@@ -2390,7 +2381,6 @@
     "title": "Arquivo",
     "trash": "Lixo",
     "type": "Tipo",
-    "unpin": "[to be translated]:Unpin from library",
     "upload": "[to be translated]:Upload files",
     "video": "Vídeo"
   },

@@ -23,7 +23,6 @@ const file: FileItem = {
   createdAt: '2026-06-24 10:00',
   updatedAt: '2026-06-24 10:00',
   trashed: false,
-  cleanupPolicy: 'manual',
   origin: 'internal',
   type: 'text'
 }
@@ -32,8 +31,7 @@ const menuActions: FileContextMenuActions = {
   onRename: vi.fn(),
   onDelete: vi.fn(),
   onRestore: vi.fn(),
-  onShowInFolder: vi.fn(),
-  onTogglePin: vi.fn()
+  onShowInFolder: vi.fn()
 }
 
 function fileListProps(renamingId: string | null): ComponentProps<typeof FileList> {
@@ -149,27 +147,6 @@ describe('FileList', () => {
 
     expect(screen.getByRole('button', { name: 'files.remove_from_library' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'files.delete.label' })).not.toBeInTheDocument()
-  })
-
-  it('shows the pin state and toggles it from the row action', () => {
-    const autoFile: FileItem = { ...file, id: 'auto-file', cleanupPolicy: 'delete_when_unreferenced' }
-
-    // Pinned (manual) → the row surfaces an "unpin" affordance...
-    const { rerender } = render(<FileList {...fileListProps(null)} files={[file]} />)
-    fireEvent.click(screen.getByRole('button', { name: 'files.unpin' }))
-    expect(menuActions.onTogglePin).toHaveBeenCalledWith('file-1', false)
-
-    // ...auto (unpinned) → a "pin" affordance that flips it to manual.
-    rerender(<FileList {...fileListProps(null)} files={[autoFile]} />)
-    expect(screen.queryByRole('button', { name: 'files.unpin' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'files.pin' }))
-    expect(menuActions.onTogglePin).toHaveBeenCalledWith('auto-file', true)
-  })
-
-  it('hides the pin action in the trash view', () => {
-    render(<FileList {...fileListProps(null)} isTrash files={[{ ...file, trashed: true }]} />)
-    expect(screen.queryByRole('button', { name: 'files.pin' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'files.unpin' })).not.toBeInTheDocument()
   })
 
   it('hides invalid row actions for missing files', () => {

@@ -2068,6 +2068,7 @@
     "generate_random_seed": "ランダムシードを生成",
     "get_embedding_dimension": "埋め込み次元を取得",
     "go_to_settings": "設定に移動",
+    "help": "[to be translated]:Help",
     "html_preview": "HTMLプレビュー",
     "i_know": "わかりました",
     "ignore": "無視",
@@ -2318,14 +2319,6 @@
     "audio": "オーディオ",
     "batch_delete": "一括削除",
     "batch_operation": "すべて選択",
-    "cleanup": {
-      "confirm_content": "[to be translated]:Permanently delete auto-managed files that no chat or painting still references. Files you pinned to the library are kept.",
-      "confirm_ok": "[to be translated]:Clean up",
-      "confirm_title": "[to be translated]:Clean up unreferenced files?",
-      "done": "[to be translated]:Cleaned up {{count}} file(s)",
-      "failed": "[to be translated]:Cleanup failed",
-      "label": "[to be translated]:Clean up unreferenced files"
-    },
     "count": "ファイル",
     "created_at": "作成日",
     "delete": {
@@ -2371,8 +2364,6 @@
       "description": "これにより、{{count}}個のファイルが永久に削除されます。この操作は元に戻せません。",
       "title": "ファイルを完全に削除しますか？"
     },
-    "pin": "[to be translated]:Pin to library",
-    "pin_failed": "[to be translated]:Failed to update the file",
     "preview": {
       "error": "ファイルを開くのに失敗しました"
     },
@@ -2390,7 +2381,6 @@
     "title": "ファイル",
     "trash": "ゴミ",
     "type": "タイプ",
-    "unpin": "[to be translated]:Unpin from library",
     "upload": "[to be translated]:Upload files",
     "video": "ビデオ"
   },

@@ -310,15 +310,6 @@ describe('FilesPage keyboard rename', () => {
     expect(screen.getByRole('button', { name: 'files.actions' })).toBeDisabled()
   })
 
-  it('exposes the cleanup escape valve in the active-view toolbar (safety-abort recovery)', () => {
-    // The count-fraction safety abort latches until a user-confirmed drain; the
-    // active-view toolbar must surface that entry point so the escape valve is
-    // reachable (file-entry-cleanup.md §5.3). getAllByRole because the trigger
-    // (aria-label) and its force-mounted menu item (text) share the name.
-    render(<FilesPage />)
-    expect(screen.getAllByRole('button', { name: 'files.cleanup.label' }).length).toBeGreaterThan(0)
-  })
-
   it('uses stats for type counts before all active pages are loaded', () => {
     mockFileStats({
       activeTotal: 170,

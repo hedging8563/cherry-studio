@@ -2319,14 +2319,6 @@
     "audio": "音频",
     "batch_delete": "批量删除",
     "batch_operation": "全选",
-    "cleanup": {
-      "confirm_content": "永久删除已无任何对话或绘画引用的自动管理文件。已钉到文件库的文件会保留。",
-      "confirm_ok": "清理",
-      "confirm_title": "清理未引用文件？",
-      "done": "已清理 {{count}} 个文件",
-      "failed": "清理失败",
-      "label": "清理未引用文件"
-    },
     "count": "个文件",
     "created_at": "创建时间",
     "delete": {
@@ -2372,8 +2364,6 @@
       "description": "将永久删除 {{count}} 个文件，此操作无法撤销。",
       "title": "永久删除文件？"
     },
-    "pin": "钉到文件库",
-    "pin_failed": "更新文件失败",
     "preview": {
       "error": "打开文件失败"
     },
@@ -2391,7 +2381,6 @@
     "title": "文件",
     "trash": "回收站",
     "type": "类型",
-    "unpin": "从文件库取消钉住",
     "upload": "上传文件",
     "video": "视频"
   },

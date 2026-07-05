@@ -2068,6 +2068,7 @@
     "generate_random_seed": "Zufälligen Seed generieren",
     "get_embedding_dimension": "Abruf der Einbettungsdimension",
     "go_to_settings": "Zu Einstellungen",
+    "help": "[to be translated]:Help",
     "html_preview": "HTML-Vorschau",
     "i_know": "Verstanden",
     "ignore": "Ignorieren",
@@ -2318,14 +2319,6 @@
     "audio": "Audio",
     "batch_delete": "Stapellöschung",
     "batch_operation": "Alle auswählen",
-    "cleanup": {
-      "confirm_content": "[to be translated]:Permanently delete auto-managed files that no chat or painting still references. Files you pinned to the library are kept.",
-      "confirm_ok": "[to be translated]:Clean up",
-      "confirm_title": "[to be translated]:Clean up unreferenced files?",
-      "done": "[to be translated]:Cleaned up {{count}} file(s)",
-      "failed": "[to be translated]:Cleanup failed",
-      "label": "[to be translated]:Clean up unreferenced files"
-    },
     "count": "Dateien",
     "created_at": "Erstellt am",
     "delete": {
@@ -2371,8 +2364,6 @@
       "description": "Dies wird {{count}} Datei(en) dauerhaft entfernen. Diese Aktion kann nicht rückgängig gemacht werden.",
       "title": "Dateien dauerhaft löschen?"
     },
-    "pin": "[to be translated]:Pin to library",
-    "pin_failed": "[to be translated]:Failed to update the file",
     "preview": {
       "error": "Datei konnte nicht geöffnet werden"
     },
@@ -2390,7 +2381,6 @@
     "title": "Dateien",
     "trash": "Müll",
     "type": "Typ",
-    "unpin": "[to be translated]:Unpin from library",
     "upload": "[to be translated]:Upload files",
     "video": "Video"
   },

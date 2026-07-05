@@ -2068,6 +2068,7 @@
     "generate_random_seed": "Générer une graine aléatoire",
     "get_embedding_dimension": "Obtenir la dimension d'intégration",
     "go_to_settings": "Aller aux paramètres",
+    "help": "[to be translated]:Help",
     "html_preview": "Aperçu HTML",
     "i_know": "J'ai compris",
     "ignore": "Ignorer",
@@ -2318,14 +2319,6 @@
     "audio": "Audio",
     "batch_delete": "supprimer en masse",
     "batch_operation": "Tout sélectionner",
-    "cleanup": {
-      "confirm_content": "[to be translated]:Permanently delete auto-managed files that no chat or painting still references. Files you pinned to the library are kept.",
-      "confirm_ok": "[to be translated]:Clean up",
-      "confirm_title": "[to be translated]:Clean up unreferenced files?",
-      "done": "[to be translated]:Cleaned up {{count}} file(s)",
-      "failed": "[to be translated]:Cleanup failed",
-      "label": "[to be translated]:Clean up unreferenced files"
-    },
     "count": "Nombre de fichiers",
     "created_at": "Date de création",
     "delete": {
@@ -2371,8 +2364,6 @@
       "description": "Cela supprimera définitivement {{count}} fichier(s). Cette action ne peut pas être annulée.",
       "title": "Supprimer définitivement les fichiers ?"
     },
-    "pin": "[to be translated]:Pin to library",
-    "pin_failed": "[to be translated]:Failed to update the file",
     "preview": {
       "error": "Échec de l’ouverture du fichier"
     },
@@ -2390,7 +2381,6 @@
     "title": "Fichier",
     "trash": "Poubelle",
     "type": "Type",
-    "unpin": "[to be translated]:Unpin from library",
     "upload": "[to be translated]:Upload files",
     "video": "Vidéo"
   },
