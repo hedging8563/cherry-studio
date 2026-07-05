@@ -5,6 +5,7 @@ import {
   ChevronUp,
   FolderOpen,
   Pencil,
+  Pin,
   RotateCcw,
   SquareArrowOutUpRight,
   Trash2
@@ -122,7 +123,7 @@ export const FileList = memo(function FileList({
             onSort={onSort}
           />
         </div>
-        <div className="w-[116px] text-right text-muted-foreground/40 text-xs uppercase tracking-wider">
+        <div className="w-[145px] text-right text-muted-foreground/40 text-xs uppercase tracking-wider">
           {t('files.actions')}
         </div>
       </div>
@@ -135,6 +136,10 @@ export const FileList = memo(function FileList({
         const canOpen = !isTrash && canUseFileActions
         const canRename = !isTrash && canUseFileActions
         const canShowInFolder = !isTrash && canUseFileActions
+        // Pin is a pure retention flip; offered on active rows (incl. a missing
+        // external file). Its filled/primary state is the persistent indicator.
+        const canPin = !isTrash
+        const isPinned = file.cleanupPolicy === 'manual'
         const deleteLabel = isTrash
           ? t('files.permanent_delete')
           : file.origin === 'external'
@@ -184,7 +189,25 @@ export const FileList = memo(function FileList({
               <span className="w-[70px] shrink-0 text-muted-foreground/50 text-xs">{file.size}</span>
               <span className="w-[55px] shrink-0 text-muted-foreground/50 text-xs">{getFormatLabel(file.format)}</span>
               <span className="w-[110px] shrink-0 text-muted-foreground/50 text-xs">{file.updatedAt}</span>
-              <div className="grid w-[116px] shrink-0 grid-cols-4 justify-items-center gap-0.5">
+              <div className="grid w-[145px] shrink-0 grid-cols-5 justify-items-center gap-0.5">
+                {canPin ? (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={isPinned ? t('files.unpin') : t('files.pin')}
+                    title={isPinned ? t('files.unpin') : t('files.pin')}
+                    className={
+                      isPinned ? 'text-primary hover:text-primary' : 'text-muted-foreground/55 hover:text-foreground'
+                    }
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      menuActions.onTogglePin(file.id, !isPinned)
+                    }}>
+                    <Pin size={12} className={isPinned ? 'fill-current' : ''} />
+                  </Button>
+                ) : (
+                  renderActionPlaceholder('pin')
+                )}
                 {canOpen ? (
                   <Button
                     variant="ghost"

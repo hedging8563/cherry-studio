@@ -1,5 +1,5 @@
 import { Button, ImagePreviewTrigger } from '@cherrystudio/ui'
-import { Trash2 } from 'lucide-react'
+import { Pin, Trash2 } from 'lucide-react'
 import { memo, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -86,6 +86,7 @@ export const FileGrid = memo(function FileGrid({
         const Icon = typeIcons[file.type]
         const isRenaming = renamingId === file.id
         const isImage = file.type === 'image'
+        const isPinned = file.cleanupPolicy === 'manual'
         const previewUrl = isImage && !file.isMissing ? file.previewUrl : undefined
         const shapeClass = isImage ? 'aspect-square rounded-lg' : 'h-[72px] rounded-t-lg'
         const bgClass = isImage ? '' : typeBgColors[file.type]
@@ -130,6 +131,24 @@ export const FileGrid = memo(function FileGrid({
                   <span className="absolute bottom-1.5 left-1.5 rounded bg-destructive/10 px-1.5 py-[1px] text-[10px] text-destructive/70">
                     {t('files.missing')}
                   </span>
+                )}
+                {!isTrash && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      menuActions.onTogglePin(file.id, !isPinned)
+                    }}
+                    title={isPinned ? t('files.unpin') : t('files.pin')}
+                    aria-label={isPinned ? t('files.unpin') : t('files.pin')}
+                    className={`absolute top-1 left-1 size-6 min-h-0 rounded bg-background/95 p-0 shadow-sm backdrop-blur transition-opacity hover:bg-background ${
+                      isPinned
+                        ? 'text-primary opacity-100'
+                        : 'text-muted-foreground/70 opacity-0 hover:text-foreground group-hover:opacity-100'
+                    }`}>
+                    <Pin className={`size-3 ${isPinned ? 'fill-current' : ''}`} />
+                  </Button>
                 )}
                 <div className="absolute top-1 right-1 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                   <Button

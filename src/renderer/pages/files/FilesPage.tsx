@@ -261,7 +261,9 @@ const FileToolbar = memo(function FileToolbar({
   onBatchDelete,
   onBatchRestore,
   onSelectAll,
-  onCleanupUnreferenced
+  onCleanupUnreferenced,
+  onBatchPin,
+  onBatchUnpin
 }: {
   showSelectionControls: boolean
   selectionControlsDisabled: boolean
@@ -277,6 +279,8 @@ const FileToolbar = memo(function FileToolbar({
   onBatchRestore: () => void
   onSelectAll: (checked: boolean) => void
   onCleanupUnreferenced: () => void
+  onBatchPin: () => void
+  onBatchUnpin: () => void
 }) {
   const { t } = useTranslation()
   const allSelected = visibleSelectionState === true
@@ -323,6 +327,16 @@ const FileToolbar = memo(function FileToolbar({
                 <DropdownMenuItem onSelect={onBatchRestore}>
                   {t('files.restore')} ({selectedCount})
                 </DropdownMenuItem>
+              )}
+              {!isTrash && selectedCount > 1 && (
+                <>
+                  <DropdownMenuItem onSelect={onBatchPin}>
+                    {t('files.pin')} ({selectedCount})
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={onBatchUnpin}>
+                    {t('files.unpin')} ({selectedCount})
+                  </DropdownMenuItem>
+                </>
               )}
               {selectedCount > 1 && (
                 <DropdownMenuItem variant="destructive" onSelect={onBatchDelete}>
@@ -851,19 +865,32 @@ function FilesPage() {
   // Retention flip (pin/unpin) — a side-effect-free cleanupPolicy PATCH; the
   // list re-reads so the menu reflects the new state (file-entry-cleanup.md §4.2).
   const { trigger: patchCleanupPolicy } = useMutation('PATCH', '/files/entries/:id')
-  const handleTogglePin = useCallback(
-    async (id: string, pin: boolean) => {
+  const setCleanupPolicyFor = useCallback(
+    async (ids: readonly string[], pin: boolean) => {
+      if (ids.length === 0) return
       try {
-        await patchCleanupPolicy({
-          params: { id },
-          body: { cleanupPolicy: pin ? 'manual' : 'delete_when_unreferenced' }
-        })
+        await Promise.all(
+          ids.map((id) =>
+            patchCleanupPolicy({
+              params: { id },
+              body: { cleanupPolicy: pin ? 'manual' : 'delete_when_unreferenced' }
+            })
+          )
+        )
         void refreshActiveFiles()
       } catch {
         window.toast?.error(t('files.pin_failed'))
       }
     },
     [patchCleanupPolicy, refreshActiveFiles, t]
+  )
+  const handleTogglePin = useCallback(
+    (id: string, pin: boolean) => setCleanupPolicyFor([id], pin),
+    [setCleanupPolicyFor]
+  )
+  const handleBatchSetPin = useCallback(
+    (pin: boolean) => setCleanupPolicyFor([...selectedIds], pin),
+    [setCleanupPolicyFor, selectedIds]
   )
 
   // Escape valve for the cleanup safety abort (file-entry-cleanup.md §5.3): a
@@ -880,7 +907,15 @@ function FilesPage() {
     if (!confirmed) return
     try {
       const report = await window.api.file.runSweep({ confirmed: true })
-      window.toast?.success(t('files.cleanup.done', { count: report.entryCleanup.deleted }))
+      // runSweep RETURNS a report rather than throwing when the cleanup pass
+      // fails, so a DB-error pass reaches here — its outcome MUST be checked
+      // independently (sweep.ts EntryCleanupSummary JSDoc), or a failed drain
+      // would show "cleaned 0 files" success instead of an error.
+      if (report.entryCleanup.outcome === 'completed') {
+        window.toast?.success(t('files.cleanup.done', { count: report.entryCleanup.deleted }))
+      } else {
+        window.toast?.error(t('files.cleanup.failed'))
+      }
       void refreshActiveFiles()
       void refetchFileStats()
     } catch {
@@ -1004,6 +1039,8 @@ function FilesPage() {
             onBatchRestore={() => void handleRestore(new Set(selectedIds))}
             onSelectAll={handleSelectAllVisible}
             onCleanupUnreferenced={() => void handleCleanupUnreferenced()}
+            onBatchPin={() => void handleBatchSetPin(true)}
+            onBatchUnpin={() => void handleBatchSetPin(false)}
           />
         )}
 
