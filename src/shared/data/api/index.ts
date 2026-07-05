@@ -80,6 +80,7 @@ export {
   DataApiError,
   DataApiErrorFactory,
   isDataApiError,
+  isDataApiNotFoundError,
   isSerializedDataApiError,
   toDataApiError
 } from './apiErrors'
