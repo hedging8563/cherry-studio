@@ -79,21 +79,14 @@ export type OrphanReport =
  * counts, timing).
  *
  * **Consumers MUST check `outcome` independently of the umbrella `OrphanReport.outcome`.**
- * `runSweep` folds this in as `counts.entryCleanup` but never lets an
- * `aborted` / `failed` cleanup change the umbrella outcome — so a UI that
- * only inspects the top-level `outcome === 'completed'` would report "all
- * cleaned up" while the cleanup pass actually aborted on its safety threshold
- * or crashed. Read `entryCleanup.outcome` to surface that.
+ * `runSweep` folds this in as `counts.entryCleanup` but never lets a `failed`
+ * cleanup change the umbrella outcome — so a caller that only inspects the
+ * top-level `outcome === 'completed'` would treat a crashed cleanup pass as
+ * "all cleaned up". Read `entryCleanup.outcome` to surface that.
  *
- * Discriminated on `outcome` so `abortReason` cannot be attached to a
- * non-`aborted` summary (mirrors `OrphanReport`).
+ * Discriminated on `outcome` (mirrors `OrphanReport`). There is no `aborted`
+ * outcome: the cleanup pass has no volume abort (spec §5.3).
  */
 export type EntryCleanupSummary =
   | { readonly outcome: 'completed'; readonly candidates: number; readonly deleted: number }
-  | {
-      readonly outcome: 'aborted'
-      readonly candidates: number
-      readonly deleted: number
-      readonly abortReason: 'count-fraction'
-    }
   | { readonly outcome: 'failed'; readonly candidates: number; readonly deleted: number }

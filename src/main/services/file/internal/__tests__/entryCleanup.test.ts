@@ -246,39 +246,16 @@ describe('entryCleanup', () => {
     spy.mockRestore()
   })
 
-  it('aborts on count-fraction and proceeds when confirmed', async () => {
+  it('reclaims a large candidate set (100% of rows) — there is no volume abort', async () => {
+    // Regression for the removed count-fraction abort (spec §5.3): an earlier
+    // revision refused to reclaim when candidates were ≥20 and >50% of rows.
+    // That false-positived on the primary legitimate case — a user deleting many
+    // chats/paintings whose attachments then genuinely should be reclaimed.
     for (let i = 0; i < 25; i++) await seedInternal(nthId(100 + i), 'delete_when_unreferenced')
-    // total rows == 25 auto candidates -> fraction 100% ≥ 50%, count ≥ 20
-    const aborted = await runEntryCleanup(makeDeps())
-    expect(aborted.outcome).toBe('aborted')
-    expect(aborted.abortReason).toBe('count-fraction')
-    expect(fileEntryService.countAll()).toBe(25)
-    const drained = await runEntryCleanup(makeDeps(), { confirmed: true })
-    expect(drained.outcome).toBe('completed')
-    expect(drained.deleted).toBe(25) // batch limit 100 > 25, single pass drains them all
-  })
-
-  it('aborts when candidates exceed the batch limit (fraction keys off the true count, not batch.length)', async () => {
-    // 120 auto candidates, total 120 → fraction 100%. The abort must use the real
-    // candidate COUNT (120), not the ≤100 batch slice — a `batch.length` numerator
-    // would read 100 and still trip here, but this pins that a >batch-limit backlog
-    // aborts rather than silently draining 100/pass past the safety gate.
-    for (let i = 0; i < 120; i++) await seedInternal(nthId(400 + i), 'delete_when_unreferenced', { withBlob: false })
-    const report = await runEntryCleanup(makeDeps())
-    expect(report.candidates).toBe(120)
-    expect(report.totalEntries).toBe(120)
-    expect(report.outcome).toBe('aborted')
-    expect(fileEntryService.countAll()).toBe(120)
-  })
-
-  it('does not abort when the count is ≥20 but the fraction is ≤50%', async () => {
-    // 20 auto + 30 manual → total 50, 20 is not > 25. The count leg alone must not
-    // trip the gate; both legs are required.
-    for (let i = 0; i < 20; i++) await seedInternal(nthId(500 + i), 'delete_when_unreferenced', { withBlob: false })
-    for (let i = 0; i < 30; i++) await seedInternal(nthId(600 + i), 'manual', { withBlob: false })
     const report = await runEntryCleanup(makeDeps())
     expect(report.outcome).toBe('completed')
-    expect(report.deleted).toBe(20)
+    expect(report.deleted).toBe(25)
+    expect(fileEntryService.countAll()).toBe(0)
   })
 
   it('counts gonePinned when the tx re-read finds the row gone (or pinned) mid-flight', async () => {
@@ -363,16 +340,6 @@ describe('entryCleanup', () => {
       const report = await runEntryCleanup(makeDeps())
       const summary = summariseEntryCleanup(report)
       expect(summary).toEqual({ outcome: 'completed', candidates: report.candidates, deleted: report.deleted })
-    })
-
-    it('carries abortReason through when present', async () => {
-      for (let i = 0; i < 25; i++) await seedInternal(nthId(300 + i), 'delete_when_unreferenced')
-      const report = await runEntryCleanup(makeDeps())
-      const summary = summariseEntryCleanup(report)
-      expect(summary.outcome).toBe('aborted')
-      // Narrow the discriminated union before reading the aborted-only field.
-      if (summary.outcome !== 'aborted') throw new Error('expected aborted summary')
-      expect(summary.abortReason).toBe('count-fraction')
     })
   })
 })

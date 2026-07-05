@@ -673,13 +673,13 @@ export interface FileIpcApi {
    * DB failures dominate as `failed`; FS-side partial/aborted/failed outcomes
    * degrade the umbrella report to `partial` via `fsSweepIssue`.
    *
-   * `params.confirmed` drains a cleanup backlog that exceeded its safety
-   * threshold (surfaced as `entryCleanup.outcome === 'aborted'` otherwise).
+   * Caller-initiated maintenance; no user-facing UI triggers it (the entry
+   * cleanup it wraps is silent — see file-entry-cleanup.md's Decision note).
    *
    * @phase 2 — wired in Batch 0 (`IpcChannel.File_RunSweep` →
    * `FileManager.registerIpcHandlers`)
    */
-  runSweep(params?: { confirmed?: boolean }): Promise<OrphanReport>
+  runSweep(): Promise<OrphanReport>
 }
 
 // ─── Electron Types ───

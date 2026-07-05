@@ -187,7 +187,7 @@ const api = {
     getPhysicalPath: (params: GetPhysicalPathIpcParams): Promise<FilePath> =>
       ipcRenderer.invoke(IpcChannel.File_GetPhysicalPath, params),
     permanentDelete: (handle: FileHandle): Promise<void> => ipcRenderer.invoke(IpcChannel.File_PermanentDelete, handle),
-    runSweep: (params?: { confirmed?: boolean }) => ipcRenderer.invoke(IpcChannel.File_RunSweep, params ?? {}),
+    runSweep: () => ipcRenderer.invoke(IpcChannel.File_RunSweep),
     deleteExternalFile: (filePath: string) => ipcRenderer.invoke(IpcChannel.File_DeleteExternalFile, filePath),
     deleteExternalDir: (dirPath: string) => ipcRenderer.invoke(IpcChannel.File_DeleteExternalDir, dirPath),
     move: (path: string, newPath: string) => ipcRenderer.invoke(IpcChannel.File_Move, path, newPath),

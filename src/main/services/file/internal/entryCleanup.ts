@@ -7,6 +7,9 @@
  * registry-driven anti-join (fileRelations.persistentRefAbsenceConditions);
  * each candidate is re-verified inside a serialized write tx before deletion;
  * FS cleanup happens after commit via lifecycle.cleanupDeletedEntry.
+ *
+ * The pass is fully silent (no user surface) and has no volume-based abort —
+ * see spec §5.3 for why reclaiming a large legitimate candidate set is correct.
  */
 import { loggerService } from '@logger'
 import type { FileEntry } from '@shared/data/types/file'
@@ -23,70 +26,32 @@ function assertNever(x: never): never {
 
 export const ENTRY_CLEANUP_GRACE_MS = 60 * 60 * 1000
 export const ENTRY_CLEANUP_BATCH_LIMIT = 100
-const ABORT_MIN_CANDIDATES = 20
-const ABORT_FRACTION = 0.5
-
-export interface EntryCleanupOptions {
-  readonly confirmed?: boolean
-}
 
 export interface EntryCleanupReport {
-  readonly outcome: 'completed' | 'aborted' | 'failed'
-  readonly confirmed: boolean
+  readonly outcome: 'completed' | 'failed'
   readonly candidates: number
-  /** Total `file_entry` rows — the abort fraction's denominator; kept in every report so the ratio is reconstructable. */
-  readonly totalEntries: number
   readonly deleted: number
   readonly skippedTempRefs: number
   readonly skippedRefsReappeared: number
-  /** Candidates that vanished or were pinned (`manual`) between query and tx re-read — benign no-ops. */
+  /** Candidates that vanished or were upgraded to `manual` (ensureExternal reuse) between query and tx re-read — benign no-ops. */
   readonly gonePinned: number
   /** Candidates whose per-item processing threw and was caught (retried next pass) — distinguishes a genuine no-op from a batch that all errored. */
   readonly failed: number
   readonly unlinkFailures: number
   readonly durationMs: number
-  readonly abortReason?: 'count-fraction'
   readonly errorMessage?: string
 }
 
 type CandidateOutcome = { kind: 'deleted'; entry: FileEntry } | { kind: 'refs-reappeared' } | { kind: 'gone-or-pinned' }
 
-export async function runEntryCleanup(
-  deps: FileManagerDeps,
-  opts: EntryCleanupOptions = {}
-): Promise<EntryCleanupReport> {
+export async function runEntryCleanup(deps: FileManagerDeps): Promise<EntryCleanupReport> {
   const startedAt = Date.now()
-  const confirmed = opts.confirmed ?? false
-  let totalEntries = 0
   try {
     const candidates = deps.fileEntryService.countCleanupCandidates(ENTRY_CLEANUP_GRACE_MS)
-    totalEntries = deps.fileEntryService.countAll()
     if (candidates === 0) {
       return finish({
         outcome: 'completed',
-        confirmed,
         candidates,
-        totalEntries,
-        deleted: 0,
-        skippedTempRefs: 0,
-        skippedRefsReappeared: 0,
-        gonePinned: 0,
-        failed: 0,
-        unlinkFailures: 0,
-        durationMs: Date.now() - startedAt
-      })
-    }
-
-    // Safety threshold (spec §5.3): guards classification bugs; a legitimate
-    // mass-delete unblocks via the user-confirmed drain (the FilesPage
-    // "clean up unreferenced files" action → runSweep({ confirmed: true })).
-    if (!confirmed && candidates >= ABORT_MIN_CANDIDATES && candidates > totalEntries * ABORT_FRACTION) {
-      return finish({
-        outcome: 'aborted',
-        abortReason: 'count-fraction',
-        confirmed,
-        candidates,
-        totalEntries,
         deleted: 0,
         skippedTempRefs: 0,
         skippedRefsReappeared: 0,
@@ -157,9 +122,7 @@ export async function runEntryCleanup(
 
     return finish({
       outcome: 'completed',
-      confirmed,
       candidates,
-      totalEntries,
       deleted,
       skippedTempRefs,
       skippedRefsReappeared,
@@ -173,9 +136,7 @@ export async function runEntryCleanup(
       {
         outcome: 'failed',
         errorMessage: err instanceof Error ? err.message : String(err),
-        confirmed,
         candidates: 0,
-        totalEntries,
         deleted: 0,
         skippedTempRefs: 0,
         skippedRefsReappeared: 0,
@@ -195,9 +156,6 @@ function finish(report: EntryCleanupReport, rawError?: unknown): EntryCleanupRep
     case 'completed':
       logger.info('file-entry-cleanup', payload)
       break
-    case 'aborted':
-      logger.warn('file-entry-cleanup', payload)
-      break
     case 'failed': {
       // Pass the raw error first (the logger extracts its stack) alongside the
       // structured payload — the whole-batch-crash path is the one that most
@@ -215,8 +173,6 @@ function finish(report: EntryCleanupReport, rawError?: unknown): EntryCleanupRep
 export function summariseEntryCleanup(report: EntryCleanupReport): EntryCleanupSummary {
   const base = { candidates: report.candidates, deleted: report.deleted }
   switch (report.outcome) {
-    case 'aborted':
-      return { outcome: 'aborted', ...base, abortReason: report.abortReason ?? 'count-fraction' }
     case 'failed':
       return { outcome: 'failed', ...base }
     case 'completed':

@@ -523,7 +523,7 @@ describe('FileManager (integration)', () => {
     spy.mockRestore()
   })
 
-  it('INT-14c: runSweep reclaims auto entries and reports entryCleanup; confirmed drains past the threshold', async () => {
+  it('INT-14c: runSweep reclaims a large auto candidate set and reports entryCleanup (no volume abort)', async () => {
     const HOUR = 60 * 60 * 1000
     const now = Date.now()
     const nthCleanupId = (i: number): FileEntryId => `019606a0-0000-7000-8000-${String(900 + i).padStart(12, '0')}`
@@ -541,11 +541,10 @@ describe('FileManager (integration)', () => {
     }))
     await dbh.db.insert(fileEntryTable).values(rows)
 
-    const aborted = await fm.runSweep()
-    expect(aborted.entryCleanup.outcome).toBe('aborted')
-
-    const drained = await fm.runSweep({ confirmed: true })
-    expect(drained.entryCleanup).toMatchObject({ outcome: 'completed', deleted: 25 })
+    // 25 auto candidates = 100% of rows; the removed count-fraction abort (spec
+    // §5.3) would have refused. Silent cleanup now reclaims them in one pass.
+    const swept = await fm.runSweep()
+    expect(swept.entryCleanup).toMatchObject({ outcome: 'completed', deleted: 25 })
   })
 
   it('INT-15a: batchCreateInternalEntries reports succeeded with sourceRef + per-item failed', async () => {

@@ -177,7 +177,7 @@ import {
   trash as internalTrash
 } from './internal/entry/lifecycle'
 import { rename as internalRename } from './internal/entry/rename'
-import type { EntryCleanupOptions, EntryCleanupReport } from './internal/entryCleanup'
+import type { EntryCleanupReport } from './internal/entryCleanup'
 import { runEntryCleanup as internalRunEntryCleanup, summariseEntryCleanup } from './internal/entryCleanup'
 import { observeExternalAccess } from './internal/observe'
 import {
@@ -245,7 +245,7 @@ export const GetPhysicalPathIpcSchema = z.strictObject({ id: FileEntryIdSchema }
 
 export const PermanentDeleteIpcSchema = FileHandleSchema
 
-export const RunSweepIpcSchema = z.strictObject({ confirmed: z.boolean().optional() })
+export const RunSweepIpcSchema = z.void()
 
 // ─── Version types ───
 
@@ -601,13 +601,11 @@ export interface IFileManager {
    * failed run as a healthy zero; the cleanup pass's own outcome rides in
    * `entryCleanup` without affecting the umbrella `outcome`.
    *
-   * `params.confirmed` forwards to the cleanup pass (`runEntryCleanup`) to
-   * drain a backlog that exceeded its safety threshold.
-   *
-   * User-triggered via IPC (`File_RunSweep`); no startup auto-run. See
+   * Caller-initiated maintenance via IPC (`File_RunSweep`); no startup auto-run
+   * and no user-facing UI calls it (the cleanup it wraps is silent). See
    * architecture §10 for the sweep mechanics.
    */
-  runSweep(params?: { confirmed?: boolean }): Promise<OrphanReport>
+  runSweep(): Promise<OrphanReport>
 
   // ─── 3rd-party Library Escape Hatch ───
 
@@ -674,8 +672,8 @@ export class FileManager extends BaseService implements IFileManager {
   }
 
   /** Run one cleanup pass now. Never throws — failures land in the report. */
-  async runEntryCleanup(opts?: EntryCleanupOptions): Promise<EntryCleanupReport> {
-    const report = await internalRunEntryCleanup(this.deps, opts)
+  async runEntryCleanup(): Promise<EntryCleanupReport> {
+    const report = await internalRunEntryCleanup(this.deps)
     if (report.outcome === 'completed') {
       this.lastCleanupCompletedAt = Date.now()
     }
@@ -738,9 +736,7 @@ export class FileManager extends BaseService implements IFileManager {
         (path) => fsRemove(path)
       )
     })
-    this.ipcHandle(IpcChannel.File_RunSweep, async (_e, params: unknown) =>
-      this.runSweep(RunSweepIpcSchema.parse(params ?? {}))
-    )
+    this.ipcHandle(IpcChannel.File_RunSweep, async () => this.runSweep())
   }
 
   /**
@@ -750,12 +746,10 @@ export class FileManager extends BaseService implements IFileManager {
    * §7 Layer 3) concurrently, returning a single `OrphanReport` once all
    * three settle. Running the cleanup pass first means the DB sweep's
    * zero-ref report doesn't re-report entries the pass just reclaimed.
-   * User-triggered via the `File_RunSweep` IPC channel; there is no startup
-   * auto-run.
-   *
-   * `params.confirmed` forwards to the cleanup pass to drain a backlog that
-   * exceeded its safety threshold; the cleanup pass's own outcome rides in
-   * `counts.entryCleanup` and never changes the umbrella `outcome` below.
+   * Caller-initiated via the `File_RunSweep` IPC channel; there is no startup
+   * auto-run and no user-facing UI trigger. The cleanup pass's own outcome
+   * rides in `counts.entryCleanup` and never changes the umbrella `outcome`
+   * below.
    *
    * Each branch absorbs its own errors via inner try/catch and surfaces
    * them through the umbrella `OrphanReport`:
@@ -774,8 +768,8 @@ export class FileManager extends BaseService implements IFileManager {
    *   exists to prevent.
    * - Both clean → `outcome: 'completed'`.
    */
-  async runSweep(params: { confirmed?: boolean } = {}): Promise<OrphanReport> {
-    const cleanupReport = await this.runEntryCleanup({ confirmed: params.confirmed ?? false })
+  async runSweep(): Promise<OrphanReport> {
+    const cleanupReport = await this.runEntryCleanup()
     const startedAt = Date.now()
     const fsSweepPromise = runFileSweep({ fileEntryService: this.deps.fileEntryService }).catch(
       (err): FileSweepReport => {

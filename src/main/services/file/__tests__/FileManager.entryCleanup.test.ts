@@ -32,9 +32,7 @@ type Report = Awaited<ReturnType<InstanceType<typeof FileManager>['runEntryClean
 function completedReport(overrides: Partial<Report> = {}): Report {
   return {
     outcome: 'completed',
-    confirmed: false,
     candidates: 0,
-    totalEntries: 0,
     deleted: 0,
     skippedTempRefs: 0,
     skippedRefsReappeared: 0,
