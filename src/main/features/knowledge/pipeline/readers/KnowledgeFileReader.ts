@@ -10,6 +10,7 @@ import { MarkdownReader } from '@vectorstores/readers/markdown'
 import { PDFReader } from '@vectorstores/readers/pdf'
 import { TextFileReader } from '@vectorstores/readers/text'
 
+import { toMaterialRelativePath } from '../../items'
 import { getKnowledgeBaseFilePath } from '../../pathStorage'
 import { DraftsExportReader } from './files/DraftsExportReader'
 import { EpubReader } from './files/EpubReader'
@@ -67,9 +68,5 @@ export async function loadDocumentsFromKnowledgeBaseFile(
 }
 
 export async function loadFileDocuments(item: KnowledgeItemOf<'file'>): Promise<Document[]> {
-  return loadDocumentsFromKnowledgeBaseFile(
-    item.baseId,
-    item.data.indexedRelativePath ?? item.data.relativePath,
-    item.data.source
-  )
+  return loadDocumentsFromKnowledgeBaseFile(item.baseId, toMaterialRelativePath(item), item.data.source)
 }
