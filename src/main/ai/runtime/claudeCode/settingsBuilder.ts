@@ -54,6 +54,7 @@ import { autoDiscoverGitBash } from '@main/utils/commandResolver'
 import { getPathStatus, type PathStatus } from '@main/utils/file'
 import { rtkRewrite } from '@main/utils/rtk'
 import { getShellEnv } from '@main/utils/shellEnv'
+import { AGENT_RUNTIME_CAPABILITIES } from '@shared/ai/agentRuntimeCapabilities'
 import {
   CHANNEL_SECURITY_PROMPT,
   REPORT_ARTIFACTS_PROMPT,
@@ -721,7 +722,9 @@ async function buildToolPermissions(
         type: 'tool-approval-request',
         approvalId,
         toolCallId: opts.toolUseID,
-        providerMetadata: { cherry: { transport: 'claude-agent', toolName } satisfies CherryToolMeta }
+        providerMetadata: {
+          cherry: { transport: AGENT_RUNTIME_CAPABILITIES['claude-code'].transport, toolName } satisfies CherryToolMeta
+        }
       })
     })
   }
