@@ -1,11 +1,11 @@
 import path from 'node:path'
 
+import { application } from '@application'
 import { agentService } from '@data/services/AgentService'
 import { agentSessionService } from '@data/services/AgentSessionService'
 import type { AgentSession, AgentSessionEvent, CompactionResult, ContextUsage } from '@earendil-works/pi-coding-agent'
 import { loggerService } from '@logger'
 import { buildAgentUserContent } from '@main/ai/runtime/agentUserContent'
-import { application } from '@main/core/application'
 import type { AgentSessionCompactionAnchorData, AgentSessionCompactionTrigger } from '@shared/ai/agentSessionCompaction'
 import type { AgentSessionContextUsage } from '@shared/ai/agentSessionContextUsage'
 import type { AgentPermissionMode } from '@shared/data/api/schemas/agents'
