@@ -572,16 +572,6 @@ export class AgentSessionRuntimeService extends BaseService {
     return toolApprovalRegistry.dispatch(approvalId, decision)
   }
 
-  async prewarmSession(sessionId: string): Promise<void> {
-    const driver = await this.resolveSessionDriver(sessionId)
-    await driver?.prewarmSession?.(sessionId)
-  }
-
-  async closeSessionWarm(sessionId: string): Promise<void> {
-    const driver = await this.resolveSessionDriver(sessionId)
-    await driver?.closeSessionWarm?.(sessionId)
-  }
-
   protected onStop(): void {
     this.closeAll()
     toolApprovalRegistry.clear('agent-session-runtime-stop')
@@ -594,14 +584,6 @@ export class AgentSessionRuntimeService extends BaseService {
 
   private isCurrentEntry(entry: AgentSessionRuntimeEntry): boolean {
     return this.entries.get(entry.sessionId) === entry
-  }
-
-  private async resolveSessionDriver(sessionId: string) {
-    const session = await agentSessionService.getById(sessionId)
-    if (!session?.agentId) return undefined
-    const agent = await agentService.getAgent(session.agentId)
-    if (!agent) return undefined
-    return runtimeDriverRegistry.getAgentSessionDriver(agent.type)
   }
 
   private async ensureConnection(entry: AgentSessionRuntimeEntry): Promise<boolean> {
@@ -643,6 +625,13 @@ export class AgentSessionRuntimeService extends BaseService {
     this.refreshContextUsage(entry, connection)
     this.refreshSupportedCommands(entry, connection)
     entry.connectionLoop = this.runConnectionLoop(entry, connection).finally(() => {
+      // Defensively close so the loop terminating for ANY reason (including a bug thrown from
+      // handleRuntimeEvent) disposes the connection — otherwise the pi driver, whose events only
+      // report `done` after close(), leaks its live in-process session. Both drivers' close() is
+      // idempotent, so this is a safe no-op on the normal path where the host already closed it.
+      void Promise.resolve(connection.close()).catch((error) =>
+        logger.warn('Agent runtime connection close failed', { sessionId: entry.sessionId, error })
+      )
       if (entry.connection === connection) entry.connection = undefined
       if (entry.connectionLoop) entry.connectionLoop = undefined
     })
