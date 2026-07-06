@@ -68,6 +68,7 @@ flowchart LR
     A5 --> A6{完整模式?}
     A6 -->|完整| A7[收集文件与知识库资源]
     A6 -->|精简| A7s[跳过外部资源收集 resources 空集]
+    A7 --> A8[裁 missing file_entry/knowledge_base 行 DB↔staged 对齐]
   end
   subgraph S2[备份归档]
     B[manifest 加 backup.sqlite 加 files 加 knowledge]
@@ -79,7 +80,7 @@ flowchart LR
     C4 --> C5[FTS 重建与一致性检查]
     C5 --> C6[结果页与撤销入口]
   end
-  A7 --> B
+  A8 --> B
   A7s --> B
   B --> C1
 ```
@@ -192,7 +193,7 @@ post-#16532：旧的多态 `file_ref` 表已拆分。`chat_message_file_ref`（F
 
 `fileRefSourcePolicies`（sourceType→ownerDomain）覆盖 3 个 sourceType（`temp_session` runtime-only、`chat_message`→TOPICS、`painting`→PAINTINGS）管**导出期文件 blob 收集**——随 TOPICS/PAINTINGS contributor 落地 + temp_session runtime-owner 决策（finalize #11 follow-up）。
 
-**实施 caveat**：① post-restore 一致性检查（无悬空 ref / 无 file_entry 缺 blob，失败回滚）；② file_entry 软删除 vs ref 硬删除不对称（导出过滤须只取 `deletedAt IS NULL`）。
+**实施 caveat**：① post-restore 一致性检查（无悬空 ref / 无 **internal** file_entry 缺 blob，失败回滚；**external file_entry by design 无 blob**——`origin='external'` 只引用 `externalPath` 用户文件、不拷 blob，换机 inherent dangling，见 domain spec `aggregate-domains.md` FILE_STORAGE origin 语义）；② file_entry 软删除 vs ref 硬删除不对称（导出过滤须只取 `deletedAt IS NULL`）。
 
 #### 5.2 junction reference 在 SKIP/RENAME 的处理（不引入跨域 remap）
 
