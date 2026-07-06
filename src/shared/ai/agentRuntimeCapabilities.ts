@@ -5,7 +5,7 @@ import type { AgentPermissionMode } from '@shared/data/api/schemas/agents'
 import type { AgentType } from '@shared/data/types/agent'
 import type { Model } from '@shared/data/types/model'
 import type { Provider } from '@shared/data/types/provider'
-import { isGeminiProvider } from '@shared/utils/provider'
+import { isAgentRuntimeSupportedModel } from '@shared/utils/model'
 
 import type { SlashCommand } from './slashCommands'
 
@@ -73,8 +73,8 @@ export const AGENT_RUNTIME_CAPABILITIES = {
     skills: true,
     slashCommands: CLAUDE_CODE_BUILTIN_COMMANDS,
     createDefaults: { permissionMode: 'bypassPermissions', soulEnabled: true },
-    // Orphan models stay allowed (pre-descriptor behavior): the gate only excludes known Gemini providers.
-    isModelCompatible: (provider) => !provider || !isGeminiProvider(provider),
+    // Orphan models stay allowed: isAgentRuntimeSupportedModel skips the provider check when provider is undefined.
+    isModelCompatible: (provider, model) => isAgentRuntimeSupportedModel(model, provider),
     transport: 'claude-agent',
     builtinTools: () =>
       claudeUserFacingTools().map((tool) => ({

@@ -1,3 +1,4 @@
+import type * as CreateDialogModule from '@renderer/components/resourceCatalog/dialogs/create'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -27,31 +28,35 @@ vi.mock('@renderer/components/resourceCatalog/selectors', () => ({
   }
 }))
 
-vi.mock('@renderer/components/resourceCatalog/dialogs/create', () => ({
-  ResourceCreateWizard: (props: any) => {
-    mocks.createDialogProps = props
-    return (
-      <div data-testid="create-dialog" data-open={String(props.open)} data-kind={props.kind}>
-        <button
-          type="button"
-          onClick={() =>
-            props.onSubmit({
-              avatar: '🤖',
-              name: 'New',
-              agentType: 'claude-code',
-              modelId: 'p::m',
-              description: 'desc',
-              prompt: 'sys',
-              knowledgeBaseIds: [],
-              skillIds: []
-            })
-          }>
-          submit-create
-        </button>
-      </div>
-    )
+vi.mock('@renderer/components/resourceCatalog/dialogs/create', async (importOriginal) => {
+  const actual = await importOriginal<typeof CreateDialogModule>()
+  return {
+    ...actual,
+    ResourceCreateWizard: (props: any) => {
+      mocks.createDialogProps = props
+      return (
+        <div data-testid="create-dialog" data-open={String(props.open)} data-kind={props.kind}>
+          <button
+            type="button"
+            onClick={() =>
+              props.onSubmit({
+                avatar: '🤖',
+                name: 'New',
+                agentType: 'claude-code',
+                modelId: 'p::m',
+                description: 'desc',
+                prompt: 'sys',
+                knowledgeBaseIds: [],
+                skillIds: []
+              })
+            }>
+            submit-create
+          </button>
+        </div>
+      )
+    }
   }
-}))
+})
 
 vi.mock('@renderer/data/hooks/useDataApi', () => ({
   useMutation: () => ({ trigger: mocks.createAgent, isLoading: false })

@@ -1,9 +1,9 @@
 import { loggerService } from '@logger'
 import {
+  buildAgentCreateBody,
   ResourceCreateWizard,
   type ResourceCreateWizardValues
 } from '@renderer/components/resourceCatalog/dialogs/create'
-import { buildAgentCreateBody } from '@renderer/components/resourceCatalog/dialogs/create/agentCreateBody'
 import type { SelectorShellMountStrategy, SelectorShellProps } from '@renderer/components/SelectorShell'
 import { useMutation, useQuery } from '@renderer/data/hooks/useDataApi'
 import { useAgentModelFilter } from '@renderer/hooks/agent/useAgentModelFilter'
