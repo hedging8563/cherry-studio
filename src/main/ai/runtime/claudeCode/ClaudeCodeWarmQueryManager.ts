@@ -2,7 +2,7 @@ import type { Options, WarmQuery } from '@anthropic-ai/claude-agent-sdk'
 import { startup } from '@anthropic-ai/claude-agent-sdk'
 import { loggerService } from '@logger'
 import { BaseService, Injectable, Phase, ServicePhase } from '@main/core/lifecycle'
-import getShellEnv from '@main/utils/shell-env'
+import { getShellEnv } from '@main/utils/shellEnv'
 
 import { buildClaudeCodeWarmQueryRequestForAgentSession } from './agentSessionWarmup'
 

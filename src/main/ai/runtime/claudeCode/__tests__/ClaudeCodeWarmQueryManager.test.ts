@@ -11,8 +11,8 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   startup: startupMock
 }))
 
-vi.mock('@main/utils/shell-env', () => ({
-  default: getShellEnvMock
+vi.mock('@main/utils/shellEnv', () => ({
+  getShellEnv: getShellEnvMock
 }))
 
 vi.mock('../agentSessionWarmup', () => ({
