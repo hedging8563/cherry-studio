@@ -215,6 +215,20 @@ vi.mock('react-i18next', async (importOriginal) => {
           'agent.cherryClaw.heartbeat.intervalHelper': 'Heartbeat interval.',
           'agent.settings.tooling.preapproved.autoBadge': 'Added by mode',
           'agent.settings.tooling.preapproved.autoDisabledTooltip': 'Added by {{mode}}',
+          'agent.tools.builtin.bash.description': 'Run shell commands',
+          'agent.tools.builtin.bash.label': 'Run shell commands',
+          'agent.tools.builtin.edit.description': 'Edit files',
+          'agent.tools.builtin.edit.label': 'Edit files',
+          'agent.tools.builtin.find.description': 'Find files',
+          'agent.tools.builtin.find.label': 'Find files',
+          'agent.tools.builtin.grep.description': 'Search file contents',
+          'agent.tools.builtin.grep.label': 'Search file contents',
+          'agent.tools.builtin.ls.description': 'List directory contents',
+          'agent.tools.builtin.ls.label': 'List directory contents',
+          'agent.tools.builtin.read.description': 'Read files',
+          'agent.tools.builtin.read.label': 'Read files',
+          'agent.tools.builtin.write.description': 'Write files',
+          'agent.tools.builtin.write.label': 'Write files',
           'common.avatar': 'Avatar',
           'common.cancel': 'Cancel',
           'common.clear': 'Clear',
@@ -434,6 +448,13 @@ const AGENT: AgentDetail = {
   modelName: 'Old Model',
   createdAt: '2024-01-01T00:00:00.000Z',
   updatedAt: '2024-01-01T00:00:00.000Z'
+}
+
+const PI_AGENT: AgentDetail = {
+  ...AGENT,
+  id: 'pi-agent-1',
+  type: 'pi',
+  name: 'Pi Agent'
 }
 
 beforeAll(() => {
@@ -916,6 +937,30 @@ describe('edit dialogs', () => {
 
     selectTab('Skills')
     expect(screen.getByText('Skill One')).toBeInTheDocument()
+  })
+
+  it('shows only built-in tools for pi agents and saves lowercase disabled tools', async () => {
+    render(<AgentEditDialog open resource={PI_AGENT} onOpenChange={vi.fn()} onSaved={vi.fn()} />)
+
+    expandToolsMenu()
+    expect(screen.getByRole('tab', { name: 'Built-in tools' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'MCP' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Skills' })).not.toBeInTheDocument()
+
+    selectTab('Built-in tools')
+    expect(screen.getByRole('switch', { name: 'Read files' })).toBeInTheDocument()
+    expect(screen.getByRole('switch', { name: 'Run shell commands' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Run shell commands' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(updateAgentMock).toHaveBeenCalledWith({
+        body: expect.objectContaining({
+          disabledTools: ['bash']
+        })
+      })
+    )
   })
 
   it('uses the same MCP server list presentation in assistant and agent editing', async () => {
