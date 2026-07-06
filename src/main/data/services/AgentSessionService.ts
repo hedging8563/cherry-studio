@@ -172,7 +172,7 @@ export class AgentSessionService {
   ensureTraceId(sessionId: string): string {
     return application.get('DbService').withWriteTx((tx) => {
       const [row] = tx
-        .select({ traceId: sessionsTable.traceId })
+        .select({ traceId: sessionsTable.traceId, updatedAt: sessionsTable.updatedAt })
         .from(sessionsTable)
         .where(eq(sessionsTable.id, sessionId))
         .limit(1)
@@ -182,7 +182,11 @@ export class AgentSessionService {
       if (row.traceId) return row.traceId
 
       const traceId = randomBytes(16).toString('hex')
-      tx.update(sessionsTable).set({ traceId }).where(eq(sessionsTable.id, sessionId)).run()
+      // Assigning a trace id is internal bookkeeping, not a user edit. Pin updatedAt to its current
+      // value (Drizzle skips the $onUpdateFn when the column is set explicitly) so prewarming/opening
+      // a session in trace mode doesn't reorder the session list or defeat AgentPage's blank-placeholder
+      // reuse check, which treats updatedAt === createdAt as "untouched".
+      tx.update(sessionsTable).set({ traceId, updatedAt: row.updatedAt }).where(eq(sessionsTable.id, sessionId)).run()
       return traceId
     })
   }

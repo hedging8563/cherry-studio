@@ -221,6 +221,23 @@ describe('AgentSessionService', () => {
     expect(agentSessionService.getById(session.id).traceId).toBe(traceId)
   })
 
+  // Trace-mode prewarm/open assigns the session trace id. That write must NOT bump updatedAt, or the
+  // session list reorders and AgentPage's blank-placeholder reuse check (updatedAt === createdAt) breaks
+  // before the user has sent anything.
+  it('assigns a trace id without bumping updatedAt', async () => {
+    const session = await createSession('Trace stable')
+    // Pin updatedAt to a fixed past value (explicit set skips the $onUpdateFn) so any bump is unmistakable.
+    await dbh.db.update(agentSessionTable).set({ updatedAt: 1000 }).where(eq(agentSessionTable.id, session.id))
+
+    agentSessionService.ensureTraceId(session.id)
+
+    const [row] = await dbh.db
+      .select({ updatedAt: agentSessionTable.updatedAt })
+      .from(agentSessionTable)
+      .where(eq(agentSessionTable.id, session.id))
+    expect(row.updatedAt).toBe(1000)
+  })
+
   it('updates a session and returns the updated entity', async () => {
     const session = await createSession('Before update')
 
