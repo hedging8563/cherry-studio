@@ -720,6 +720,14 @@ const AgentComposerInner = ({
     draftTokensRef.current = draftTokens
   }, [draftTokens])
 
+  useEffect(() => {
+    // A restored 24h draft already carries text at mount, so setText's empty→non-empty transition
+    // never fires onComposeIntent. Reserve + prewarm here too, or a resumed draft sent without another
+    // keystroke cold-starts. Host-side reservation is idempotent, so firing once on mount is enough.
+    if ((initialDraftRef.current?.text.trim().length ?? 0) > 0) onComposeIntent?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only: initialDraftRef is captured once; host reservation is idempotent.
+  }, [])
+
   const tokens = useMemo(
     () => [...files.map(agentFileToComposerToken), ...selectedSkills.map(agentSkillToComposerToken)],
     [files, selectedSkills]

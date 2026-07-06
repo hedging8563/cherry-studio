@@ -554,6 +554,41 @@ describe('AgentComposer', () => {
     expect(onComposeIntent).toHaveBeenCalledTimes(2)
   })
 
+  it('fires onComposeIntent on mount when a restored draft already has cached text', () => {
+    // A resumed 24h draft carries text at mount with no keystroke, so the empty→non-empty setText
+    // transition never runs; prewarm must still be requested or the resumed draft cold-starts.
+    vi.mocked(cacheService.getCasual).mockReturnValue({ text: 'resumed draft', tokens: [] })
+    const onComposeIntent = vi.fn()
+    render(
+      <AgentHomeComposer
+        agentId="agent-1"
+        sessionId="session-1"
+        sendMessage={mocks.sendMessage}
+        stop={mocks.stop}
+        isStreaming={false}
+        onComposeIntent={onComposeIntent}
+      />
+    )
+
+    expect(onComposeIntent).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not fire onComposeIntent on mount when there is no cached draft text', () => {
+    const onComposeIntent = vi.fn()
+    render(
+      <AgentHomeComposer
+        agentId="agent-1"
+        sessionId="session-1"
+        sendMessage={mocks.sendMessage}
+        stop={mocks.stop}
+        isStreaming={false}
+        onComposeIntent={onComposeIntent}
+      />
+    )
+
+    expect(onComposeIntent).not.toHaveBeenCalled()
+  })
+
   it('updates the agent model from the inline model selector when model changes are allowed', () => {
     render(
       <AgentComposer
