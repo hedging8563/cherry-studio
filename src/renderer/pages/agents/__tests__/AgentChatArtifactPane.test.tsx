@@ -662,7 +662,7 @@ describe('AgentChat artifact pane', () => {
     expect(screen.getByTestId('session-pane')).toBeInTheDocument()
   })
 
-  it('maximizes into the chat-area overlay, unmounting the docked host', () => {
+  it('maximizes into the chat-area overlay without keeping the docked host open', () => {
     renderAgentChat({ pane: <aside data-testid="session-pane" />, paneOpen: true, panePosition: 'left' })
 
     openFilesPane()
@@ -670,8 +670,8 @@ describe('AgentChat artifact pane', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'common.maximize' }))
 
-    // The docked host unmounts entirely while maximized (snap, no width animation).
-    expect(screen.queryByTestId('artifact-right-pane')).toBeNull()
+    // The docked host no longer takes layout space while maximized.
+    expect(screen.getByTestId('artifact-right-pane')).toHaveAttribute('data-open', 'false')
     // The overlay fills the chat area; the composer dock layer lifts above it.
     expect(screen.getByTestId('chat-center-overlay').firstElementChild).toHaveClass(
       'absolute',
@@ -742,7 +742,7 @@ describe('AgentChat artifact pane', () => {
     expect(screen.getByTestId('artifact-pane')).toHaveAttribute('data-file-search-keyword', 'index')
   })
 
-  it('mounts the artifact pane in preview mode when maximizing and restoring the pane', () => {
+  it('keeps the artifact pane view mode when maximizing and restoring the pane', () => {
     renderAgentChat({ pane: <aside data-testid="session-pane" />, paneOpen: true, panePosition: 'left' })
 
     openFilesPane()
@@ -753,14 +753,14 @@ describe('AgentChat artifact pane', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'common.maximize' }))
 
-    expect(screen.queryByTestId('artifact-right-pane')).toBeNull()
+    expect(screen.getByTestId('artifact-right-pane')).toHaveAttribute('data-open', 'false')
     expect(screen.getByTestId('chat-center-overlay')).toContainElement(screen.getByTestId('artifact-pane'))
-    expect(screen.getByTestId('artifact-pane')).toHaveAttribute('data-view-mode', 'preview')
+    expect(screen.getByTestId('artifact-pane')).toHaveAttribute('data-view-mode', 'code')
 
     fireEvent.click(screen.getByRole('button', { name: 'common.minimize' }))
 
     expect(screen.getByTestId('artifact-right-pane')).toHaveAttribute('data-open', 'true')
-    expect(screen.getByTestId('artifact-pane')).toHaveAttribute('data-view-mode', 'preview')
+    expect(screen.getByTestId('artifact-pane')).toHaveAttribute('data-view-mode', 'code')
   })
 
   it('resets the artifact view mode when the workspace changes', () => {

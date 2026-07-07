@@ -142,7 +142,7 @@ function TopicRightPaneSurface({
   const branchLiveState = useTopicBranchLiveState(topicId ?? '')
   const { mode, chrome } = useWindowFrame()
   const isWindow = mode === 'window'
-  const canvasFocusKey = `${topicId ?? ''}:${shellState.maximized ? 'maximized' : 'docked'}:${shellState.pdfLayoutRefreshKey}`
+  const canvasFocusKey = `${topicId ?? ''}:${shellState.pdfLayoutRefreshKey}`
   const canvasLayoutReady = shellState.maximized || !shellState.pdfLayoutPending
   const handleLocateMessage = useCallback(
     (messageId: string) => {

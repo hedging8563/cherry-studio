@@ -17,6 +17,8 @@ import {
   Shell,
   useResourcePane,
   useShellActions,
+  useShellActivityState,
+  useShellPdfLayoutState,
   useShellState
 } from '@renderer/components/chat/panes/Shell'
 import {
@@ -186,8 +188,7 @@ function AgentRightPaneStateProvider({
   modelFallback,
   statusEnabled = true
 }: AgentRightPaneProviderProps) {
-  const shellState = useShellState()
-  const { activeTab } = shellState
+  const { activeTab, open } = useShellActivityState()
   const { openTab } = useShellActions()
   const [flowTabs, setFlowTabs] = useState<AgentFlowTab[]>([])
   const [previewFileSelection, setPreviewFileSelection] = useState<ArtifactPaneFileSelection | null>(null)
@@ -197,7 +198,7 @@ function AgentRightPaneStateProvider({
   const workspaceKey = `${workspaceId ?? ''}\0${workspacePath ?? ''}`
   const previousWorkspaceKeyRef = useRef(workspaceKey)
   const lastSelectableFileRef = useRef<string | null>(null)
-  const fileTreeModelOpen = filesEnabled !== false && shellState.open && activeTab === 'files'
+  const fileTreeModelOpen = filesEnabled !== false && open && activeTab === 'files'
 
   // Built once here (the provider survives the Host↔Overlay maximize swap), so
   // maximize/minimize no longer remounts + rematerializes the workspace tree.
@@ -400,14 +401,14 @@ function AgentRightPaneProvider(props: AgentRightPaneProviderProps) {
 function AgentRightPaneFilesPanel() {
   const { state, actions } = useAgentRightPane()
   const model = useAgentFileTreeModel()
-  const shellState = useShellState()
+  const { pdfLayoutPending, pdfLayoutRefreshKey } = useShellPdfLayoutState()
   return (
     <ArtifactPaneView
       workspacePath={state.workspacePath}
       previewFileSelection={state.previewFileSelection}
       onPreviewClose={actions.closeFilePreview}
-      pdfLayoutPending={shellState.pdfLayoutPending}
-      pdfLayoutRefreshKey={shellState.pdfLayoutRefreshKey}
+      pdfLayoutPending={pdfLayoutPending}
+      pdfLayoutRefreshKey={pdfLayoutRefreshKey}
       enableFileSearch
       model={model}
       selectedFile={state.selectedFile}
@@ -483,7 +484,7 @@ function AgentToolFlowMessageList({
 
 function AgentRightPaneFlowPanel({ tab }: { tab: AgentFlowTab }) {
   const { state } = useAgentRightPane()
-  const { activeTab } = useShellState()
+  const { activeTab } = useShellActivityState()
   const { t } = useTranslation()
 
   // Only the active flow tab drives the projection, so skip stale siblings.

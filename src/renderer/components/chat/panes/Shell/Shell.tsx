@@ -10,7 +10,8 @@ import type { CommandId } from '@shared/utils/command'
 import { Maximize2, Minimize2, X } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import type { ComponentProps, MouseEvent, ReactNode } from 'react'
-import { createContext, use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, use, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 
 import { useChatMaximizedOverlayBottomInset } from '../../layout/ChatViewportInsetContext'
@@ -35,6 +36,16 @@ export interface ShellState {
   pdfLayoutRefreshKey: number
 }
 
+export interface ShellActivityState {
+  open: boolean
+  activeTab: string
+}
+
+export interface ShellPdfLayoutState {
+  pdfLayoutPending: boolean
+  pdfLayoutRefreshKey: number
+}
+
 export interface ShellActions {
   close: (afterClose?: () => void) => void
   finishClose: () => void
@@ -49,8 +60,17 @@ interface ShellContextValue {
   actions: ShellActions
 }
 
+interface ShellSurfaceContextValue {
+  root: HTMLDivElement | null
+  hostMounted: boolean
+  setHostMounted: (mounted: boolean) => void
+}
+
 const ShellStateContext = createContext<ShellState | null>(null)
+const ShellActivityStateContext = createContext<ShellActivityState | null>(null)
+const ShellPdfLayoutStateContext = createContext<ShellPdfLayoutState | null>(null)
 const ShellActionsContext = createContext<ShellActions | null>(null)
+const ShellSurfaceContext = createContext<ShellSurfaceContextValue | null>(null)
 
 function useShell(): ShellContextValue {
   return {
@@ -72,6 +92,18 @@ export function useOptionalShellActions(): ShellActions | undefined {
 export function useShellState(): ShellState {
   const state = use(ShellStateContext)
   if (!state) throw new Error('useShellState must be used within <Shell>')
+  return state
+}
+
+export function useShellActivityState(): ShellActivityState {
+  const state = use(ShellActivityStateContext)
+  if (!state) throw new Error('useShellActivityState must be used within <Shell>')
+  return state
+}
+
+export function useShellPdfLayoutState(): ShellPdfLayoutState {
+  const state = use(ShellPdfLayoutStateContext)
+  if (!state) throw new Error('useShellPdfLayoutState must be used within <Shell>')
   return state
 }
 
@@ -100,6 +132,15 @@ function ShellProvider({
   const [activeTab, setActiveTab] = useState(defaultTab)
   const [pdfLayoutPending, setPdfLayoutPending] = useState(false)
   const [pdfLayoutRefreshKey, setPdfLayoutRefreshKey] = useState(0)
+  const [surfaceRoot] = useState(() => {
+    if (typeof document === 'undefined') return null
+
+    const root = document.createElement('div')
+    root.dataset.shellSurfaceRoot = ''
+    root.className = 'h-full min-h-0 w-full overflow-hidden'
+    return root
+  })
+  const [surfaceHostMounted, setSurfaceHostMounted] = useState(false)
   const openRef = useRef(open)
   const closeCallbacksRef = useRef<Array<() => void>>([])
   // Held in a ref so the open/close actions stay referentially stable (no memo churn for consumers).
@@ -174,41 +215,85 @@ function ShellProvider({
     () => ({ open, maximized, activeTab, pdfLayoutPending, pdfLayoutRefreshKey }),
     [activeTab, maximized, open, pdfLayoutPending, pdfLayoutRefreshKey]
   )
+  const activityState = useMemo<ShellActivityState>(() => ({ open, activeTab }), [activeTab, open])
+  const pdfLayoutState = useMemo<ShellPdfLayoutState>(
+    () => ({ pdfLayoutPending, pdfLayoutRefreshKey }),
+    [pdfLayoutPending, pdfLayoutRefreshKey]
+  )
   const actions = useMemo<ShellActions>(
     () => ({ close, finishClose, minimize, openTab, toggleMaximized, refreshPdfLayout }),
     [close, finishClose, minimize, openTab, refreshPdfLayout, toggleMaximized]
   )
+  const surface = useMemo<ShellSurfaceContextValue>(
+    () => ({
+      root: surfaceRoot,
+      hostMounted: surfaceHostMounted,
+      setHostMounted: setSurfaceHostMounted
+    }),
+    [surfaceHostMounted, surfaceRoot]
+  )
 
   return (
     <ShellActionsContext value={actions}>
-      <ShellStateContext value={state}>{children}</ShellStateContext>
+      <ShellStateContext value={state}>
+        <ShellActivityStateContext value={activityState}>
+          <ShellPdfLayoutStateContext value={pdfLayoutState}>
+            <ShellSurfaceContext value={surface}>{children}</ShellSurfaceContext>
+          </ShellPdfLayoutStateContext>
+        </ShellActivityStateContext>
+      </ShellStateContext>
     </ShellActionsContext>
   )
 }
 
-// Docked, resizable side container. Unmounted entirely while maximized: the
-// maximized surface lives in the overlay instead. Remounting on minimize lands
-// inside RightPaneHost's `AnimatePresence initial={false}`, so the dock snaps
-// back in a single reflow rather than animating width frame by frame.
+function useShellSurface(): ShellSurfaceContextValue | null {
+  return use(ShellSurfaceContext)
+}
+
+function ShellSurfaceSlot({ active }: { active: boolean }) {
+  const surface = useShellSurface()
+  const slotRef = useRef<HTMLDivElement>(null)
+
+  useLayoutEffect(() => {
+    if (!active || !surface?.root || !slotRef.current) return
+    slotRef.current.appendChild(surface.root)
+  }, [active, surface?.root])
+
+  return <div ref={slotRef} data-shell-surface-slot="" className="h-full min-h-0 w-full overflow-hidden" />
+}
+
+// Docked, resizable side container. The content itself is mounted once into a
+// stable surface root; maximize/minimize moves that root between this docked
+// slot and the overlay slot so expensive previews do not remount or re-parse.
 function ShellHost({ children }: { children: ReactNode }) {
   const { state, actions } = useShell()
-  if (state.maximized) return null
+  const surface = useShellSurface()
+  const setSurfaceHostMounted = surface?.setHostMounted
+  const docked = state.open && !state.maximized
+
+  useEffect(() => {
+    setSurfaceHostMounted?.(true)
+    return () => setSurfaceHostMounted?.(false)
+  }, [setSurfaceHostMounted])
 
   return (
-    <RightPaneHost
-      open={state.open}
-      width={ARTIFACT_RIGHT_PANE_DEFAULT_WIDTH}
-      resizable
-      minWidth={ARTIFACT_RIGHT_PANE_MIN_WIDTH}
-      defaultWidth={ARTIFACT_RIGHT_PANE_DEFAULT_WIDTH}
-      maxWidth={ARTIFACT_RIGHT_PANE_MAX_WIDTH}
-      cacheKey={ARTIFACT_RIGHT_PANE_CACHE_KEY}
-      reservedCenterWidth={CHAT_CENTER_MIN_USABLE_WIDTH}
-      onReservedSpaceUnavailable={actions.close}
-      onOpenAnimationComplete={actions.refreshPdfLayout}
-      onCloseAnimationComplete={actions.finishClose}>
-      {children}
-    </RightPaneHost>
+    <>
+      <RightPaneHost
+        open={docked}
+        width={ARTIFACT_RIGHT_PANE_DEFAULT_WIDTH}
+        resizable
+        minWidth={ARTIFACT_RIGHT_PANE_MIN_WIDTH}
+        defaultWidth={ARTIFACT_RIGHT_PANE_DEFAULT_WIDTH}
+        maxWidth={ARTIFACT_RIGHT_PANE_MAX_WIDTH}
+        cacheKey={ARTIFACT_RIGHT_PANE_CACHE_KEY}
+        reservedCenterWidth={CHAT_CENTER_MIN_USABLE_WIDTH}
+        onReservedSpaceUnavailable={actions.close}
+        onOpenAnimationComplete={actions.refreshPdfLayout}
+        onCloseAnimationComplete={actions.finishClose}>
+        <ShellSurfaceSlot active={docked} />
+      </RightPaneHost>
+      {state.open && surface?.root ? createPortal(children, surface.root) : null}
+    </>
   )
 }
 
@@ -223,8 +308,10 @@ const CLIP_REVEALED = 'inset(0% 0% 0% 0%)'
 
 function ShellMaximizedOverlay({ children }: { children: ReactNode }) {
   const { state, actions } = useShell()
+  const surface = useShellSurface()
   const reduceMotion = useReducedMotion()
   const bottomInset = useChatMaximizedOverlayBottomInset()
+  const useSharedSurface = Boolean(surface?.hostMounted && surface.root)
 
   return (
     <AnimatePresence onExitComplete={actions.finishClose}>
@@ -241,7 +328,7 @@ function ShellMaximizedOverlay({ children }: { children: ReactNode }) {
             data-shell-maximized-overlay-content=""
             className="h-full min-h-0 overflow-hidden"
             style={bottomInset > 0 ? { height: `max(0px, calc(100% - ${bottomInset}px))` } : undefined}>
-            {children}
+            {useSharedSurface ? <ShellSurfaceSlot active={state.open && state.maximized} /> : children}
           </div>
         </motion.div>
       )}

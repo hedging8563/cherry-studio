@@ -217,6 +217,15 @@ function ShellMinimizeButton() {
   )
 }
 
+function PersistentSurfaceProbe({ onMount, onUnmount }: { onMount: () => void; onUnmount: () => void }) {
+  useEffect(() => {
+    onMount()
+    return onUnmount
+  }, [onMount, onUnmount])
+
+  return <div data-testid="persistent-surface">persistent content</div>
+}
+
 function triggerRightSidebarShortcut() {
   const handler = shortcutHandlers.get('topic.sidebar.toggle')
   if (!handler) throw new Error('Expected right sidebar shortcut to be registered')
@@ -585,6 +594,44 @@ describe('Shell.Host', () => {
     await waitFor(() => {
       expect(screen.getByTestId('shell-state')).toHaveTextContent('closed:files:false')
     })
+  })
+
+  it('keeps one pane surface mounted across maximize and restore', () => {
+    rightPaneHostMock.notifyReservedSpaceUnavailableOnOpen = false
+    const onMount = vi.fn()
+    const onUnmount = vi.fn()
+    const { container } = render(
+      <Shell defaultTab="files">
+        <Shell.Toggle tab="files" />
+        <ToggleMaximizedButton />
+        <Shell.Host>
+          <PersistentSurfaceProbe onMount={onMount} onUnmount={onUnmount} />
+        </Shell.Host>
+        <Shell.MaximizedOverlay>
+          <div>fallback content</div>
+        </Shell.MaximizedOverlay>
+      </Shell>
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'common.open_sidebar' }))
+
+    const dockedHost = screen.getByTestId('right-pane-host')
+    expect(dockedHost).toContainElement(screen.getByTestId('persistent-surface'))
+    expect(onMount).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByRole('button', { name: 'toggle maximized' }))
+
+    const overlayContent = container.querySelector('[data-shell-maximized-overlay-content]')
+    expect(overlayContent).toContainElement(screen.getByTestId('persistent-surface'))
+    expect(screen.getByTestId('right-pane-host')).toHaveAttribute('data-open', 'false')
+    expect(onMount).toHaveBeenCalledTimes(1)
+    expect(onUnmount).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'toggle maximized' }))
+
+    expect(screen.getByTestId('right-pane-host')).toContainElement(screen.getByTestId('persistent-surface'))
+    expect(onMount).toHaveBeenCalledTimes(1)
+    expect(onUnmount).not.toHaveBeenCalled()
   })
 })
 
