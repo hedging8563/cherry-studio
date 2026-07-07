@@ -151,6 +151,16 @@ describe('index-documents job handler', () => {
     expect(progressValues).toEqual([...progressValues].sort((a, b) => a - b))
     // Cleared once the item finishes embedding — no stale percentage left behind.
     expect(cacheService.deleteShared).toHaveBeenCalledWith(progressKey)
+    // Cleared only after the item actually flips to 'completed', not right after the
+    // batch loop — otherwise the row would show a bare "embedding" status with no
+    // percentage for the whole material-write phase in between.
+    const completedCallOrder = knowledgeItemUpdateStatusMock.mock.calls.findIndex(
+      ([, status]) => status === 'completed'
+    )
+    const completedInvocationOrder = knowledgeItemUpdateStatusMock.mock.invocationCallOrder[completedCallOrder]
+    const deleteSharedCallOrder = cacheService.deleteShared.mock.calls.findIndex(([key]) => key === progressKey)
+    const deleteSharedInvocationOrder = cacheService.deleteShared.mock.invocationCallOrder[deleteSharedCallOrder]
+    expect(deleteSharedInvocationOrder).toBeGreaterThan(completedInvocationOrder)
   })
 
   it('stops embedding more batches once the job is aborted mid-loop', async () => {

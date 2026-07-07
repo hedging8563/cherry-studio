@@ -311,7 +311,6 @@ async function buildRebuildMaterialInput(
         EMBEDDING_PROGRESS_CACHE_TTL_MS
       )
     }
-    cacheService.deleteShared(progressKey)
 
     embeddings = missing.map(([embeddingTextHash], index) => ({ embeddingTextHash, vector: vectors[index] }))
   }
@@ -354,5 +353,9 @@ async function writeItemMaterial(
     const store = await vectorStoreService.getIndexStore(base)
     await store.rebuildMaterial(itemId, input)
     knowledgeItemService.updateStatus(itemId, 'completed')
+    // Only now, once the item has actually left 'embedding' — clearing it right after the
+    // batch loop (before this material write lands) left a stretch of 'embedding' status
+    // with no progress value while rebuildMaterial was still writing to index.sqlite.
+    application.get('CacheService').deleteShared(embeddingProgressCacheKey(itemId))
   })
 }
