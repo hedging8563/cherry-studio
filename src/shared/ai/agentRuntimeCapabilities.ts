@@ -94,7 +94,9 @@ export const AGENT_RUNTIME_CAPABILITIES = {
     permissionModes: ALL_PERMISSION_MODES.filter((mode) => mode !== 'plan'),
     modelTiers: false,
     soul: true,
-    mcp: false,
+    // MCP servers selected on the agent are bridged into the pi session as customTools and gated by
+    // the approval extension (not auto-approved) — see PiRuntimeConnection / piMcpToolAdapter.
+    mcp: true,
     skills: true,
     slashCommands: PI_BUILTIN_COMMANDS,
     // Soul is opt-in for pi (createDefaults.soulEnabled stays false, unlike claude's true): pi's

@@ -32,6 +32,7 @@ import type {
 } from '../types'
 import { createPiApprovalExtension } from './approvalExtension'
 import { resolvePiProviderInjection } from './modelInjection'
+import { buildMcpToolDefinitions } from './piMcpToolAdapter'
 import { loadPiSdk } from './piSdk'
 import { PiStreamAdapter } from './piStreamAdapter'
 import { buildSoulToolDefinitions, SOUL_TOOL_NAMES } from './piToolAdapter'
@@ -176,10 +177,15 @@ export class PiRuntimeConnection implements AgentRuntimeConnection {
 
     const sessionManager = this.resolveSessionManager(pi, workspacePath, sessionDir)
 
-    // Soul mode adds the autonomy tools (cron/notify/config/memory) as pi `customTools`. pi presents
-    // them to the model as callable tools regardless of `promptSnippet`; the assembled persona prompt
-    // already documents when to use them, so no snippet is needed for discovery.
-    const customTools = soulEnabled ? buildSoulToolDefinitions(...buildSoulToolContexts(agent.id, session)) : undefined
+    // `customTools` spans two trust domains and they must stay separate:
+    //  - Soul autonomy tools (cron/notify/config/memory): Cherry-owned, auto-approved (below).
+    //  - Bridged MCP tools (the agent's selected servers): THIRD-PARTY, gated by the approval
+    //    extension exactly like a built-in — never auto-approved.
+    // pi presents both to the model as callable tools; the persona prompt / tool descriptions cover
+    // discovery, so no `promptSnippet` is needed. Either set may be empty.
+    const soulTools = soulEnabled ? buildSoulToolDefinitions(...buildSoulToolContexts(agent.id, session)) : []
+    const mcpTools = await buildMcpToolDefinitions(agent.mcps ?? [])
+    const customTools = [...soulTools, ...mcpTools]
 
     const { session: piSession } = await pi.createAgentSession({
       cwd: workspacePath,
@@ -193,7 +199,7 @@ export class PiRuntimeConnection implements AgentRuntimeConnection {
       // pi defaults to read/bash/edit/write only; Cherry exposes grep/find/ls too,
       // so opt into the full built-in set explicitly.
       tools: [...PI_BUILTIN_TOOL_NAMES],
-      ...(customTools ? { customTools } : {}),
+      ...(customTools.length > 0 ? { customTools } : {}),
       // Bake disabled tools out of the session's tool set (plan capability matrix); the approval gate
       // also blocks them live so a mid-session disable is enforced. A disabled soul customTool is
       // excluded here too (pi filters excludeTools out of customTools). No soul-specific builtins are

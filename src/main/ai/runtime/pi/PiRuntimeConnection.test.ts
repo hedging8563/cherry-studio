@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   listChannels: vi.fn(),
   buildSystemPrompt: vi.fn(),
   buildSoulToolDefinitions: vi.fn(),
+  buildMcpToolDefinitions: vi.fn(),
   // pi fakes / captures
   subscribeCb: undefined as ((event: AgentSessionEvent) => void) | undefined,
   unsubscribe: vi.fn(),
@@ -75,6 +76,9 @@ vi.mock('./piToolAdapter', () => ({
   buildSoulToolDefinitions: mocks.buildSoulToolDefinitions,
   SOUL_TOOL_NAMES: new Set(['cron', 'notify', 'config', 'memory'])
 }))
+// The MCP adapter needs the full MCP service graph; mock it to a wiring seam so this suite asserts
+// only how its output is merged into customTools and how the approval gate treats those names.
+vi.mock('./piMcpToolAdapter', () => ({ buildMcpToolDefinitions: mocks.buildMcpToolDefinitions }))
 vi.mock('./modelInjection', () => ({ resolvePiProviderInjection: mocks.resolveInjection }))
 vi.mock('./piSdk', () => ({ loadPiSdk: mocks.loadPiSdk }))
 vi.mock('@main/utils/rtk', () => ({ rtkRewrite: vi.fn().mockResolvedValue(null) }))
@@ -190,6 +194,7 @@ beforeEach(() => {
     { name: 'config' },
     { name: 'memory' }
   ])
+  mocks.buildMcpToolDefinitions.mockResolvedValue([])
   mocks.skillList.mockResolvedValue([])
   mocks.getSkillDirectory.mockImplementation((folderName: string) => `/cherry/skills/${folderName}`)
   mocks.resolveInjection.mockResolvedValue({
@@ -779,6 +784,75 @@ describe('PiRuntimeConnection', () => {
     expect(
       conn.applyPolicyUpdate({ type: 'tool-policy', agent: { mcps: [], disabledTools: ['edit'], configuration: {} } })
     ).toBe(true)
+  })
+
+  describe('MCP bridging', () => {
+    const soulSession = {
+      id: 'sess-1',
+      agentId: 'agent-1',
+      workspaceId: 'ws-1',
+      workspace: { path: WORKSPACE, type: 'user' as const }
+    }
+
+    /** Grab the approval gate's `tool_call` handler from the second extension factory. */
+    function gateHandler(): (event: unknown, ctx: unknown) => Promise<{ block?: boolean } | undefined> {
+      const factories = (mocks.loaderOpts as { extensionFactories: Array<(pi: unknown) => void> }).extensionFactories
+      let handler!: (event: unknown, ctx: unknown) => Promise<{ block?: boolean } | undefined>
+      factories[1]({
+        on: (evt: string, h: unknown) => {
+          if (evt === 'tool_call') handler = h as typeof handler
+        }
+      })
+      return handler
+    }
+
+    it('bridges the agent MCP tools as customTools when soul is off (mcp defs alone)', async () => {
+      mocks.getAgent.mockReturnValue({ id: 'agent-1', model: 'p::m', mcps: ['srv-1', 'srv-2'] })
+      mocks.buildMcpToolDefinitions.mockResolvedValue([{ name: 'mcp__srv__do', label: 'do' }])
+      await new PiRuntimeConnection(input).start()
+
+      expect(mocks.buildMcpToolDefinitions).toHaveBeenCalledWith(['srv-1', 'srv-2'])
+      expect(mocks.buildSoulToolDefinitions).not.toHaveBeenCalled()
+      expect(mocks.createOpts?.customTools).toEqual([{ name: 'mcp__srv__do', label: 'do' }])
+    })
+
+    it('merges MCP tools after soul tools and never auto-approves the MCP names (proof in one session)', async () => {
+      mocks.getAgent.mockReturnValue({
+        id: 'agent-1',
+        model: 'p::m',
+        mcps: ['srv-1'],
+        configuration: { soul_enabled: true }
+      })
+      mocks.getById.mockReturnValue(soulSession)
+      mocks.buildMcpToolDefinitions.mockResolvedValue([{ name: 'mcp__srv__do', label: 'do' }])
+      const conn = await new PiRuntimeConnection(input).start()
+
+      // Soul defs first, then the bridged MCP defs — one merged customTools list.
+      expect(mocks.createOpts?.customTools).toEqual([
+        { name: 'cron' },
+        { name: 'notify' },
+        { name: 'config' },
+        { name: 'memory' },
+        { name: 'mcp__srv__do', label: 'do' }
+      ])
+
+      const handler = gateHandler()
+      // Soul tool: in the auto-approve set → resolves immediately, registers no pending approval.
+      await expect(
+        handler({ type: 'tool_call', toolName: 'memory', toolCallId: 't-soul', input: {} }, { signal: undefined })
+      ).resolves.toBeUndefined()
+      expect(toolApprovalRegistry.size()).toBe(0)
+
+      // MCP tool: NOT auto-approved → gated in default mode, so a pending approval is registered.
+      void handler(
+        { type: 'tool_call', toolName: 'mcp__srv__do', toolCallId: 't-mcp', input: {} },
+        { signal: undefined }
+      )
+      await new Promise((r) => setTimeout(r, 0))
+      expect(toolApprovalRegistry.size()).toBe(1)
+
+      await conn.close()
+    })
   })
 
   describe('soul mode', () => {
