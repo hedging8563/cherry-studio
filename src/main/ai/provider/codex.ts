@@ -15,11 +15,12 @@ export interface CodexCredentials {
 /**
  * Rewrite a parsed OpenAI Responses payload (mutated in place and returned) into
  * the shape the ChatGPT codex backend requires: server-side `store` is rejected,
- * and with it off the encrypted reasoning must be included so it round-trips
- * across turns.
+ * response length caps are not accepted, and with store off the encrypted
+ * reasoning must be included so it round-trips across turns.
  */
 export function coerceCodexRequestJson(json: Record<string, any>): Record<string, any> {
   json.store = false
+  delete json.max_output_tokens
   const include = new Set<string>(Array.isArray(json.include) ? json.include : [])
   include.add(CODEX_REASONING_INCLUDE)
   json.include = [...include]
