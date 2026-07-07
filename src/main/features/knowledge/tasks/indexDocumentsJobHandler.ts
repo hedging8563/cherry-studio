@@ -31,7 +31,7 @@ const logger = loggerService.withContext('Knowledge:IndexDocumentsJobHandler')
 
 // Chunks per embedMany call while rebuilding an item's material. Small enough to
 // surface incremental progress, large enough to not multiply request overhead.
-const EMBEDDING_PROGRESS_BATCH_SIZE = 20
+const EMBEDDING_PROGRESS_BATCH_SIZE = 10
 const EMBEDDING_PROGRESS_CACHE_TTL_MS = 60_000
 
 /** Purely in-memory, never persisted — see `knowledge.item.embedding_progress.${itemId}` in cacheSchemas.ts. */

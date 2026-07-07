@@ -43,7 +43,7 @@ function distinctDocuments() {
 /**
  * Word-spaced (not a single featureless run) so the splitter's average
  * chars-per-token estimate stays realistic and chunkSize:50 reliably yields far
- * more than one embedding batch (batch size 20).
+ * more than one embedding batch (batch size 10).
  */
 function manyChunksText(): string {
   return Array.from({ length: 2000 }, (_, i) => `word${i}`).join(' ')
@@ -136,7 +136,7 @@ describe('index-documents job handler', () => {
 
     expect(embedKnowledgeTextsMock.mock.calls.length).toBeGreaterThan(1)
     for (const call of embedKnowledgeTextsMock.mock.calls) {
-      expect((call[1] as string[]).length).toBeLessThanOrEqual(20)
+      expect((call[1] as string[]).length).toBeLessThanOrEqual(10)
     }
 
     const progressKey = `knowledge.item.embedding_progress.${NOTE_ITEM_ID}`
