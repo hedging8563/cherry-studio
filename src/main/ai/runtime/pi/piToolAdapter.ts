@@ -57,3 +57,10 @@ export function toPiToolDefinition<Ctx>(tool: NeutralTool<Ctx>, ctx: Ctx): ToolD
 export function buildSoulToolDefinitions(clawCtx: ClawToolContext, memoryCtx: MemoryToolContext): ToolDefinition[] {
   return [...clawTools.map((tool) => toPiToolDefinition(tool, clawCtx)), toPiToolDefinition(memoryTool, memoryCtx)]
 }
+
+/**
+ * Names of the soul/autonomy tools (`cron`/`notify`/`config`/`memory`), for the pi approval
+ * extension's auto-allow set. Derived from the same tool lists as {@link buildSoulToolDefinitions}
+ * so the callable set and the auto-approved set cannot drift.
+ */
+export const SOUL_TOOL_NAMES: ReadonlySet<string> = new Set([...clawTools.map((tool) => tool.name), memoryTool.name])

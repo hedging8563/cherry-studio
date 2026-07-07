@@ -2,10 +2,14 @@ import { readdirSync } from 'node:fs'
 import path from 'node:path'
 
 import { application } from '@application'
+import { agentChannelService as channelService } from '@data/services/AgentChannelService'
 import { agentService } from '@data/services/AgentService'
 import { agentSessionService } from '@data/services/AgentSessionService'
 import type { AgentSession, AgentSessionEvent, CompactionResult, ContextUsage } from '@earendil-works/pi-coding-agent'
 import { loggerService } from '@logger'
+import { PromptBuilder } from '@main/ai/agents/cherryclaw/prompt'
+import type { ClawToolContext } from '@main/ai/agents/tools/clawTools'
+import type { MemoryToolContext } from '@main/ai/agents/tools/memoryTools'
 import { buildAgentUserContent } from '@main/ai/runtime/agentUserContent'
 import { skillService } from '@main/ai/skills/SkillService'
 import { wrapSteerReminder } from '@main/ai/steerReminder'
@@ -13,6 +17,9 @@ import type { AgentSessionCompactionAnchorData, AgentSessionCompactionTrigger } 
 import type { AgentSessionContextUsage } from '@shared/ai/agentSessionContextUsage'
 import { PI_BUILTIN_TOOLS } from '@shared/ai/piBuiltinTools'
 import type { AgentPermissionMode } from '@shared/data/api/schemas/agents'
+import type { AgentSessionEntity } from '@shared/data/api/schemas/agentSessions'
+import { AGENT_WORKSPACE_TYPE, type AgentSessionWorkspaceSource } from '@shared/data/api/schemas/agentWorkspaces'
+import type { AgentConfiguration } from '@shared/data/types/agent'
 
 import { AsyncEventQueue } from '../asyncEventQueue'
 import { toolApprovalRegistry } from '../toolApproval/ToolApprovalRegistry'
@@ -27,10 +34,15 @@ import { createPiApprovalExtension } from './approvalExtension'
 import { resolvePiProviderInjection } from './modelInjection'
 import { loadPiSdk } from './piSdk'
 import { PiStreamAdapter } from './piStreamAdapter'
+import { buildSoulToolDefinitions, SOUL_TOOL_NAMES } from './piToolAdapter'
 import { createPiProviderExtension } from './providerExtension'
 
 const logger = loggerService.withContext('PiRuntimeConnection')
 const PI_BUILTIN_TOOL_NAMES = PI_BUILTIN_TOOLS.map((tool) => tool.name)
+/** Soul-mode persona assembler, shared across pi connections (mtime-cached reads). */
+const promptBuilder = new PromptBuilder()
+/** No tools are auto-approved when soul mode is off. */
+const NO_AUTO_APPROVED_TOOLS: ReadonlySet<string> = new Set()
 
 interface PendingSteer {
   input: AgentRuntimeUserInput
@@ -79,6 +91,10 @@ export class PiRuntimeConnection implements AgentRuntimeConnection {
     this.permissionMode = agent.configuration?.permission_mode ?? 'default'
     this.disabledTools = normalizeDisabledTools(agent.disabledTools)
 
+    // Soul mode swaps the persona (assembled CherryClaw prompt), injects the autonomy tools as
+    // pi `customTools`, and auto-approves those tools — mirroring the claude driver's soul branch.
+    const soulEnabled = agent.configuration?.soul_enabled === true
+
     const injection = await resolvePiProviderInjection(this.input.modelId ?? agent.model)
     this.modelId = injection.modelId
 
@@ -112,6 +128,12 @@ export class PiRuntimeConnection implements AgentRuntimeConnection {
     const additionalSkillPaths = await resolveEnabledSkillPaths(session.agentId)
 
     const instructions = agent.instructions?.trim()
+    // Soul agents replace the plain instructions with the assembled CherryClaw persona
+    // (SOUL.md/USER.md/FACT.md + autonomy-tool guidance + bootstrap); plain instructions, if any,
+    // trail it (parity with the claude soul branch). Non-soul agents keep instructions as-is.
+    const systemPromptOverride = soulEnabled
+      ? await buildSoulSystemPrompt(workspacePath, agent.configuration, instructions)
+      : instructions
     const resourceLoader = new pi.DefaultResourceLoader({
       cwd: workspacePath,
       agentDir,
@@ -137,18 +159,27 @@ export class PiRuntimeConnection implements AgentRuntimeConnection {
           workspacePath,
           emit: (chunk) => this.eventQueue.push({ type: 'chunk', chunk }),
           getPermissionMode: () => this.permissionMode,
-          isDisabled: (toolName) => this.disabledTools.has(toolName)
+          isDisabled: (toolName) => this.disabledTools.has(toolName),
+          // Soul autonomy tools bypass the approval prompt (they run unattended); disabledTools
+          // still hard-blocks them at fire-time (disabled beats auto-allow).
+          autoApprovedTools: soulEnabled ? SOUL_TOOL_NAMES : NO_AUTO_APPROVED_TOOLS
         })
       ],
       // Suppress pi's disk-discovered SYSTEM.md / APPEND_SYSTEM.md before the
-      // override runs; Cherry owns the persona from the agent record only.
+      // override runs; Cherry owns the persona from the agent record (or the soul
+      // prompt) only.
       systemPrompt: '',
       appendSystemPrompt: [],
-      ...(instructions ? { systemPromptOverride: () => instructions } : {})
+      ...(systemPromptOverride ? { systemPromptOverride: () => systemPromptOverride } : {})
     })
     await resourceLoader.reload()
 
     const sessionManager = this.resolveSessionManager(pi, workspacePath, sessionDir)
+
+    // Soul mode adds the autonomy tools (cron/notify/config/memory) as pi `customTools`. pi presents
+    // them to the model as callable tools regardless of `promptSnippet`; the assembled persona prompt
+    // already documents when to use them, so no snippet is needed for discovery.
+    const customTools = soulEnabled ? buildSoulToolDefinitions(...buildSoulToolContexts(agent.id, session)) : undefined
 
     const { session: piSession } = await pi.createAgentSession({
       cwd: workspacePath,
@@ -162,8 +193,12 @@ export class PiRuntimeConnection implements AgentRuntimeConnection {
       // pi defaults to read/bash/edit/write only; Cherry exposes grep/find/ls too,
       // so opt into the full built-in set explicitly.
       tools: [...PI_BUILTIN_TOOL_NAMES],
-      // Bake disabled tools out of the session's tool set (plan capability matrix);
-      // the approval gate also blocks them live so a mid-session disable is enforced.
+      ...(customTools ? { customTools } : {}),
+      // Bake disabled tools out of the session's tool set (plan capability matrix); the approval gate
+      // also blocks them live so a mid-session disable is enforced. A disabled soul customTool is
+      // excluded here too (pi filters excludeTools out of customTools). No soul-specific builtins are
+      // excluded: claude's SOUL_MODE_DISALLOWED_TOOLS (Cron*/TodoWrite/*PlanMode/Worktree/Notebook)
+      // do not intersect pi's builtin set (read/grep/find/ls/bash/edit/write), so the set is empty.
       ...(this.disabledTools.size > 0 ? { excludeTools: [...this.disabledTools] } : {})
     })
 
@@ -436,6 +471,61 @@ export class PiRuntimeConnection implements AgentRuntimeConnection {
 async function resolveEnabledSkillPaths(agentId: string): Promise<string[]> {
   const installed = await skillService.list({ agentId })
   return installed.filter((skill) => skill.isEnabled).map((skill) => skillService.getSkillDirectory(skill.folderName))
+}
+
+/**
+ * Assemble the soul-mode persona: the CherryClaw system prompt (SOUL.md/USER.md/FACT.md + autonomy
+ * tool guidance + bootstrap onboarding) via the SAME {@link PromptBuilder} call the claude driver
+ * uses, with any plain agent instructions trailing it (parity with the claude soul branch). The
+ * claude-only trailing blocks (cherry-tools web guidance, report_artifacts, bundled-runtime, channel
+ * security) are omitted — pi does not inject those tools, so their guidance would not apply.
+ */
+async function buildSoulSystemPrompt(
+  workspacePath: string,
+  config: AgentConfiguration | undefined,
+  instructions: string | undefined
+): Promise<string> {
+  const soulPrompt = await promptBuilder.buildSystemPrompt(workspacePath, config)
+  return instructions ? `${soulPrompt}\n\n${instructions}` : soulPrompt
+}
+
+/**
+ * Build the per-session contexts for the soul autonomy tools from the session record — the same
+ * workspace source + source-channel resolution the claude driver's claw MCP server wiring uses.
+ * Returned as a tuple so callers can spread it into {@link buildSoulToolDefinitions}.
+ */
+function buildSoulToolContexts(agentId: string, session: AgentSessionEntity): [ClawToolContext, MemoryToolContext] {
+  const workspacePath = session.workspace.path
+  const clawCtx: ClawToolContext = {
+    agentId,
+    workspace: toWorkspaceSource(session),
+    workspacePath,
+    sourceChannelId: resolveSourceChannel(agentId, session.id)
+  }
+  return [clawCtx, { agentId, workspacePath }]
+}
+
+/** Map the session's workspace to the source discriminated union the claw tools persist. */
+function toWorkspaceSource(session: AgentSessionEntity): AgentSessionWorkspaceSource {
+  switch (session.workspace.type) {
+    case AGENT_WORKSPACE_TYPE.USER:
+      return { type: AGENT_WORKSPACE_TYPE.USER, workspaceId: session.workspaceId }
+    case AGENT_WORKSPACE_TYPE.SYSTEM:
+      return { type: AGENT_WORKSPACE_TYPE.SYSTEM }
+    default: {
+      const exhaustive: never = session.workspace.type
+      throw new Error(`Unsupported workspace type: ${String(exhaustive)}`)
+    }
+  }
+}
+
+/** The channel whose linked session is this one, if any — scopes notify/cron default delivery. */
+function resolveSourceChannel(agentId: string, sessionId: string): string | undefined {
+  try {
+    return channelService.listChannels({ agentId }).find((channel) => channel.sessionId === sessionId)?.id
+  } catch {
+    return undefined
+  }
 }
 
 /**

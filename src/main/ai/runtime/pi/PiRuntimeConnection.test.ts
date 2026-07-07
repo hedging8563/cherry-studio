@@ -20,6 +20,10 @@ const mocks = vi.hoisted(() => ({
   getPath: vi.fn(),
   loadPiSdk: vi.fn(),
   readdirSync: vi.fn(),
+  // soul-mode collaborators
+  listChannels: vi.fn(),
+  buildSystemPrompt: vi.fn(),
+  buildSoulToolDefinitions: vi.fn(),
   // pi fakes / captures
   subscribeCb: undefined as ((event: AgentSessionEvent) => void) | undefined,
   unsubscribe: vi.fn(),
@@ -55,8 +59,21 @@ vi.mock('@logger', () => ({
 vi.mock('@application', () => ({ application: { getPath: mocks.getPath } }))
 vi.mock('@data/services/AgentSessionService', () => ({ agentSessionService: { getById: mocks.getById } }))
 vi.mock('@data/services/AgentService', () => ({ agentService: { getAgent: mocks.getAgent } }))
+vi.mock('@data/services/AgentChannelService', () => ({ agentChannelService: { listChannels: mocks.listChannels } }))
 vi.mock('@main/ai/skills/SkillService', () => ({
   skillService: { list: mocks.skillList, getSkillDirectory: mocks.getSkillDirectory }
+}))
+// PromptBuilder is exercised in its own suite; here we assert the soul branch calls it and threads
+// the output through `systemPromptOverride`. The piToolAdapter is mocked to keep this a wiring test
+// (its real customTools require the full claw/memory service graph).
+vi.mock('@main/ai/agents/cherryclaw/prompt', () => ({
+  PromptBuilder: class {
+    buildSystemPrompt = mocks.buildSystemPrompt
+  }
+}))
+vi.mock('./piToolAdapter', () => ({
+  buildSoulToolDefinitions: mocks.buildSoulToolDefinitions,
+  SOUL_TOOL_NAMES: new Set(['cron', 'notify', 'config', 'memory'])
 }))
 vi.mock('./modelInjection', () => ({ resolvePiProviderInjection: mocks.resolveInjection }))
 vi.mock('./piSdk', () => ({ loadPiSdk: mocks.loadPiSdk }))
@@ -165,6 +182,14 @@ beforeEach(() => {
 
   mocks.getById.mockReturnValue({ id: 'sess-1', agentId: 'agent-1', workspace: { path: WORKSPACE } })
   mocks.getAgent.mockReturnValue({ id: 'agent-1', model: 'p::m', instructions: 'Be helpful.' })
+  mocks.listChannels.mockReturnValue([])
+  mocks.buildSystemPrompt.mockResolvedValue('SOUL PROMPT')
+  mocks.buildSoulToolDefinitions.mockReturnValue([
+    { name: 'cron' },
+    { name: 'notify' },
+    { name: 'config' },
+    { name: 'memory' }
+  ])
   mocks.skillList.mockResolvedValue([])
   mocks.getSkillDirectory.mockImplementation((folderName: string) => `/cherry/skills/${folderName}`)
   mocks.resolveInjection.mockResolvedValue({
@@ -754,5 +779,108 @@ describe('PiRuntimeConnection', () => {
     expect(
       conn.applyPolicyUpdate({ type: 'tool-policy', agent: { mcps: [], disabledTools: ['edit'], configuration: {} } })
     ).toBe(true)
+  })
+
+  describe('soul mode', () => {
+    const soulSession = {
+      id: 'sess-1',
+      agentId: 'agent-1',
+      workspaceId: 'ws-1',
+      workspace: { path: WORKSPACE, type: 'user' as const }
+    }
+
+    it('overrides the persona with the PromptBuilder output and injects the autonomy customTools', async () => {
+      mocks.getAgent.mockReturnValue({ id: 'agent-1', model: 'p::m', configuration: { soul_enabled: true } })
+      mocks.getById.mockReturnValue(soulSession)
+      await new PiRuntimeConnection(input).start()
+
+      // Persona is built via the same PromptBuilder call the claude driver uses and threaded through
+      // the pi system-prompt override.
+      expect(mocks.buildSystemPrompt).toHaveBeenCalledWith(WORKSPACE, { soul_enabled: true })
+      expect((mocks.loaderOpts as { systemPromptOverride: () => string }).systemPromptOverride()).toBe('SOUL PROMPT')
+
+      // Contexts are derived from the session; the 4 autonomy tools flow through as customTools.
+      expect(mocks.buildSoulToolDefinitions).toHaveBeenCalledWith(
+        {
+          agentId: 'agent-1',
+          workspace: { type: 'user', workspaceId: 'ws-1' },
+          workspacePath: WORKSPACE,
+          sourceChannelId: undefined
+        },
+        { agentId: 'agent-1', workspacePath: WORKSPACE }
+      )
+      expect(mocks.createOpts?.customTools).toEqual([
+        { name: 'cron' },
+        { name: 'notify' },
+        { name: 'config' },
+        { name: 'memory' }
+      ])
+    })
+
+    it('trails plain agent instructions after the persona', async () => {
+      mocks.getAgent.mockReturnValue({
+        id: 'agent-1',
+        model: 'p::m',
+        instructions: 'Be terse.',
+        configuration: { soul_enabled: true }
+      })
+      mocks.getById.mockReturnValue(soulSession)
+      await new PiRuntimeConnection(input).start()
+
+      expect((mocks.loaderOpts as { systemPromptOverride: () => string }).systemPromptOverride()).toBe(
+        'SOUL PROMPT\n\nBe terse.'
+      )
+    })
+
+    it('scopes cron/notify default delivery to the channel linked to this session', async () => {
+      mocks.getAgent.mockReturnValue({ id: 'agent-1', model: 'p::m', configuration: { soul_enabled: true } })
+      mocks.getById.mockReturnValue(soulSession)
+      mocks.listChannels.mockReturnValue([
+        { id: 'chan-other', sessionId: 'sess-other' },
+        { id: 'chan-1', sessionId: 'sess-1' }
+      ])
+      await new PiRuntimeConnection(input).start()
+
+      expect(mocks.buildSoulToolDefinitions).toHaveBeenCalledWith(
+        expect.objectContaining({ sourceChannelId: 'chan-1' }),
+        expect.anything()
+      )
+    })
+
+    it('bakes a disabled autonomy tool into excludeTools and the live gate still blocks it', async () => {
+      mocks.getAgent.mockReturnValue({
+        id: 'agent-1',
+        model: 'p::m',
+        disabledTools: ['memory'],
+        configuration: { soul_enabled: true }
+      })
+      mocks.getById.mockReturnValue(soulSession)
+      const conn = await new PiRuntimeConnection(input).start()
+
+      // Disabled beats auto-allow: baked out of the tool set at create...
+      expect(mocks.createOpts?.excludeTools).toEqual(['memory'])
+
+      // ...and hard-blocked live even though soul auto-approves the other autonomy tools.
+      const factories = (mocks.loaderOpts as { extensionFactories: Array<(pi: unknown) => void> }).extensionFactories
+      let handler!: (event: unknown, ctx: unknown) => Promise<{ block?: boolean } | undefined>
+      factories[1]({
+        on: (evt: string, h: unknown) => {
+          if (evt === 'tool_call') handler = h as typeof handler
+        }
+      })
+      await expect(
+        handler({ type: 'tool_call', toolName: 'memory', toolCallId: 'tc1', input: {} }, { signal: undefined })
+      ).resolves.toMatchObject({ block: true })
+      void conn
+    })
+
+    it('passes no customTools and keeps instructions as the override for a non-soul agent', async () => {
+      await new PiRuntimeConnection(input).start()
+
+      expect(mocks.createOpts?.customTools).toBeUndefined()
+      expect(mocks.buildSoulToolDefinitions).not.toHaveBeenCalled()
+      expect(mocks.buildSystemPrompt).not.toHaveBeenCalled()
+      expect((mocks.loaderOpts as { systemPromptOverride: () => string }).systemPromptOverride()).toBe('Be helpful.')
+    })
   })
 })

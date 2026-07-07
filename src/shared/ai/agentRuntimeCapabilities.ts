@@ -93,10 +93,13 @@ export const AGENT_RUNTIME_CAPABILITIES = {
     hintKey: 'library.config.agent.field.runtime.pi_hint',
     permissionModes: ALL_PERMISSION_MODES.filter((mode) => mode !== 'plan'),
     modelTiers: false,
-    soul: false,
+    soul: true,
     mcp: false,
     skills: true,
     slashCommands: PI_BUILTIN_COMMANDS,
+    // Soul is opt-in for pi (createDefaults.soulEnabled stays false, unlike claude's true): pi's
+    // autonomy tools run at main-process privilege with no sandbox and pi's create-default permission
+    // mode is the gated `default`, so auto-enabling autonomy would contradict that posture.
     createDefaults: { permissionMode: 'default', soulEnabled: false },
     // Orphan models are rejected (pre-descriptor behavior): pi needs the provider's endpoint
     // config to resolve a wire protocol, so no provider ⇒ not drivable. The managed CherryAI
