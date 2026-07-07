@@ -18,7 +18,7 @@ vi.mock('@main/ai/agents/tools/memoryTools', () => ({
   memoryTool: { name: 'memory', description: 'memory desc', inputSchema: { type: 'object' }, handler: memoryHandler }
 }))
 
-const { toPiToolDefinition, buildSoulToolDefinitions } = await import('./piToolAdapter')
+const { toPiToolDefinition, buildSoulToolDefinitions, SOUL_TOOL_NAMES } = await import('./piToolAdapter')
 
 function fakeTool(result: NeutralToolResult | Error): NeutralTool<{ id: string }> {
   return {
@@ -65,13 +65,22 @@ describe('toPiToolDefinition', () => {
 })
 
 describe('buildSoulToolDefinitions', () => {
-  it('builds cron, notify, config, memory in order', () => {
+  it('builds cron, notify, config, memory in order under their claude-parity mcp__ names', () => {
     const defs = buildSoulToolDefinitions(
       { agentId: 'a', workspace: { type: 'system' }, workspacePath: '/w' },
       { agentId: 'a', workspacePath: '/w' }
     )
-    expect(defs.map((d) => d.name)).toEqual(['cron', 'notify', 'config', 'memory'])
+    expect(defs.map((d) => d.name)).toEqual([
+      'mcp__claw__cron',
+      'mcp__claw__notify',
+      'mcp__claw__config',
+      'mcp__agent-memory__memory'
+    ])
+    // The short neutral name stays as the display label.
+    expect(defs.map((d) => d.label)).toEqual(['cron', 'notify', 'config', 'memory'])
     expect(defs.every((d) => typeof d.execute === 'function')).toBe(true)
+    // The approval extension's auto-allow set uses exactly the callable names.
+    expect(new Set(defs.map((d) => d.name))).toEqual(SOUL_TOOL_NAMES)
   })
 
   it('routes claw tools to the claw context and memory to the memory context', async () => {

@@ -74,7 +74,7 @@ vi.mock('@main/ai/agents/cherryclaw/prompt', () => ({
 }))
 vi.mock('./piToolAdapter', () => ({
   buildSoulToolDefinitions: mocks.buildSoulToolDefinitions,
-  SOUL_TOOL_NAMES: new Set(['cron', 'notify', 'config', 'memory'])
+  SOUL_TOOL_NAMES: new Set(['mcp__claw__cron', 'mcp__claw__notify', 'mcp__claw__config', 'mcp__agent-memory__memory'])
 }))
 // The MCP adapter needs the full MCP service graph; mock it to a wiring seam so this suite asserts
 // only how its output is merged into customTools and how the approval gate treats those names.
@@ -189,10 +189,10 @@ beforeEach(() => {
   mocks.listChannels.mockReturnValue([])
   mocks.buildSystemPrompt.mockResolvedValue('SOUL PROMPT')
   mocks.buildSoulToolDefinitions.mockReturnValue([
-    { name: 'cron' },
-    { name: 'notify' },
-    { name: 'config' },
-    { name: 'memory' }
+    { name: 'mcp__claw__cron' },
+    { name: 'mcp__claw__notify' },
+    { name: 'mcp__claw__config' },
+    { name: 'mcp__agent-memory__memory' }
   ])
   mocks.buildMcpToolDefinitions.mockResolvedValue([])
   mocks.skillList.mockResolvedValue([])
@@ -662,15 +662,15 @@ describe('PiRuntimeConnection', () => {
     expect(done).toBe(true)
   })
 
-  it('disables pi project/user resources until Cherry has a trust prompt/import model', async () => {
+  it('trusts the user-selected workspace: context files load, executable/managed discovery stays off', async () => {
     await new PiRuntimeConnection(input).start()
-    expect(mocks.settingsArgs).toEqual([{}, { projectTrusted: false }])
+    expect(mocks.settingsArgs).toEqual([{}, { projectTrusted: true }])
     expect(mocks.loaderOpts).toMatchObject({
       noExtensions: true,
       noSkills: true,
       noPromptTemplates: true,
       noThemes: true,
-      noContextFiles: true
+      noContextFiles: false
     })
     expect(mocks.reload).toHaveBeenCalledWith()
   })
@@ -829,17 +829,20 @@ describe('PiRuntimeConnection', () => {
 
       // Soul defs first, then the bridged MCP defs — one merged customTools list.
       expect(mocks.createOpts?.customTools).toEqual([
-        { name: 'cron' },
-        { name: 'notify' },
-        { name: 'config' },
-        { name: 'memory' },
+        { name: 'mcp__claw__cron' },
+        { name: 'mcp__claw__notify' },
+        { name: 'mcp__claw__config' },
+        { name: 'mcp__agent-memory__memory' },
         { name: 'mcp__srv__do', label: 'do' }
       ])
 
       const handler = gateHandler()
       // Soul tool: in the auto-approve set → resolves immediately, registers no pending approval.
       await expect(
-        handler({ type: 'tool_call', toolName: 'memory', toolCallId: 't-soul', input: {} }, { signal: undefined })
+        handler(
+          { type: 'tool_call', toolName: 'mcp__agent-memory__memory', toolCallId: 't-soul', input: {} },
+          { signal: undefined }
+        )
       ).resolves.toBeUndefined()
       expect(toolApprovalRegistry.size()).toBe(0)
 
@@ -884,10 +887,10 @@ describe('PiRuntimeConnection', () => {
         { agentId: 'agent-1', workspacePath: WORKSPACE }
       )
       expect(mocks.createOpts?.customTools).toEqual([
-        { name: 'cron' },
-        { name: 'notify' },
-        { name: 'config' },
-        { name: 'memory' }
+        { name: 'mcp__claw__cron' },
+        { name: 'mcp__claw__notify' },
+        { name: 'mcp__claw__config' },
+        { name: 'mcp__agent-memory__memory' }
       ])
     })
 
@@ -925,14 +928,14 @@ describe('PiRuntimeConnection', () => {
       mocks.getAgent.mockReturnValue({
         id: 'agent-1',
         model: 'p::m',
-        disabledTools: ['memory'],
+        disabledTools: ['mcp__agent-memory__memory'],
         configuration: { soul_enabled: true }
       })
       mocks.getById.mockReturnValue(soulSession)
       const conn = await new PiRuntimeConnection(input).start()
 
       // Disabled beats auto-allow: baked out of the tool set at create...
-      expect(mocks.createOpts?.excludeTools).toEqual(['memory'])
+      expect(mocks.createOpts?.excludeTools).toEqual(['mcp__agent-memory__memory'])
 
       // ...and hard-blocked live even though soul auto-approves the other autonomy tools.
       const factories = (mocks.loaderOpts as { extensionFactories: Array<(pi: unknown) => void> }).extensionFactories
@@ -943,7 +946,10 @@ describe('PiRuntimeConnection', () => {
         }
       })
       await expect(
-        handler({ type: 'tool_call', toolName: 'memory', toolCallId: 'tc1', input: {} }, { signal: undefined })
+        handler(
+          { type: 'tool_call', toolName: 'mcp__agent-memory__memory', toolCallId: 'tc1', input: {} },
+          { signal: undefined }
+        )
       ).resolves.toMatchObject({ block: true })
       void conn
     })
