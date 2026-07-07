@@ -1,6 +1,6 @@
 # Contributor 实现规范摘要（PR Reviewer / Contributor 速读）
 
-> 本文档合成自主架构 `docs/references/backup/backup-architecture.md`（§2/§3.5/§5.4/§6/§6.2/§7/§8.5）与配套 openspec change `modular-backup-contributors-refined` 的 5 源 spec 提取（contributor-framework / registry / backup-service-lifecycle / design / tasks）。**目的**：让 reviewer / contributor 不跨 repo（不读 openspec 完整 spec）即可理解 contributor 体系如何落地（A3 修订后的 placement + lifecycle + 聚合边界 + 不变量 + identity propagation）。
+> 本文档合成自主架构 `docs/references/backup/backup-architecture.md`（§2/§3.5/§5.4/§6/§6.2/§7/§8.5）与配套实现 spec 的 5 源提取（contributor-framework / registry / backup-service-lifecycle / design / tasks）。**目的**：让 reviewer / contributor 不跨 repo 即可理解 contributor 体系如何落地（A3 修订后的 placement + lifecycle + 聚合边界 + 不变量 + identity propagation）。
 
 ---
 
@@ -57,7 +57,7 @@
 
 **BackupService 仍是 lifecycle service**（持 orchestrator / write quiesce 编排 / restore journal 写入 + relaunch 触发等长生命周期资源——D 模型，见 §8；preboot promotion gate 是 db module 导出纯函数，不经 BackupService）：`@Injectable('BackupService') + @ServicePhase(Phase.WhenReady)`。**不** `@DependsOn(['DbService'])`（DbService 是 BeforeReady，phase 顺序自动先于 WhenReady 启动；CLAUDE.md 硬约束：WhenReady 服务不得 `@DependsOn` BeforeReady 服务）。
 
-> **恢复安全（D 模型，对齐 fullex #16714）**：restore 走 **detached merge into `work.sqlite` + preboot atomic promotion**——**永不进程内触碰 live DB**（详见 backup-architecture §9）。BackupService 在运行时只编排 write quiesce（bounded，JobManager + AI streams + Channel + drain in-flight renderer 写，owned by those modules + BackupService 编排）+ `createSnapshot(work.sqlite)` merge base + detached import pipeline + journal 写入 + `application.relaunch()`；preboot promotion gate（`src/main/index.ts` `startApp()` 第一，`initPathRegistry()` 后、`runV2MigrationGate()` 前，separate sibling `restorePromotionGate.ts`）消费窄 journal contract 做 atomic rename promotion + undo（renamed-aside `live.pre-restore-<restoreId>`）。contributor 不负责整库快照与 promotion。**已废弃**（D 模型不需要）：RESTORE BARRIER runtime silence（allowlist + `@WriteSilenceable` + renderer mutation gate）/ `restoreDbFromSnapshot`（runtime 无调用方——无 runtime rollback，pre-relaunch 失败只删 temp）/ `verifyLiveDb`（offline 在 work copy 自跑 + gate 内 post-promotion check）/ onInit recovery gate（preboot 取代）/ `PreferenceService.reloadFromDb` + rebroadcast / `armWriteGate` / `armMutationGate` / `rearmSchedules` / `afterCommit` hook（恢复后重启 cache 自然 fresh load；apply 时无 live writer——PREFERENCES cache 由 `PreferenceService.onInit` fresh load，AGENTS timer 由 `JobManager` startup recovery re-arm）。
+> **恢复安全（D 模型，对齐 @0xfullex #16714）**：restore 走 **detached merge into `work.sqlite` + preboot atomic promotion**——**永不进程内触碰 live DB**（详见 backup-architecture §9）。BackupService 在运行时只编排 write quiesce（bounded，JobManager + AI streams + Channel + drain in-flight renderer 写，owned by those modules + BackupService 编排）+ `createSnapshot(work.sqlite)` merge base + detached import pipeline + journal 写入 + `application.relaunch()`；preboot promotion gate（`src/main/main.ts` `startApp()` 第一，`initPathRegistry()` 后、`runV2MigrationGate()` 前，separate sibling `restorePromotionGate.ts`）消费窄 journal contract 做 atomic rename promotion + undo（renamed-aside `live.pre-restore-<restoreId>`）。contributor 不负责整库快照与 promotion。**已废弃**（D 模型不需要）：RESTORE BARRIER runtime silence（allowlist + `@WriteSilenceable` + renderer mutation gate）/ `restoreDbFromSnapshot`（runtime 无调用方——无 runtime rollback，pre-relaunch 失败只删 temp）/ `verifyLiveDb`（offline 在 work copy 自跑 + gate 内 post-promotion check）/ onInit recovery gate（preboot 取代）/ `PreferenceService.reloadFromDb` + rebroadcast / `armWriteGate` / `armMutationGate` / `rearmSchedules` / `afterCommit` hook（恢复后重启 cache 自然 fresh load；apply 时无 live writer——PREFERENCES cache 由 `PreferenceService.onInit` fresh load，AGENTS timer 由 `JobManager` startup recovery re-arm）。
 
 > 检查：`serviceRegistry.ts` **SHALL NOT** 含 `ContributorManager`。
 
@@ -143,7 +143,7 @@
 
 ---
 
-## 5a. 恢复执行模型 + hook 边界（D 模型，对齐 fullex #16714）
+## 5a. 恢复执行模型 + hook 边界（D 模型，对齐 @0xfullex #16714）
 
 > 详见 backup-architecture §9。contributor 只负责**静态事实与合并语义**，恢复执行模型（detached merge + preboot promotion）由 orchestrator + db module gate 承载。
 
@@ -158,9 +158,9 @@ restore 走 **D 模型**（detached merge + preboot promotion）——运行时�
 4. **detached import**（独立 better-sqlite3，非 live `DbService.sqlite`）：对 work.sqlite 跑 contributor import pipeline（handle 参数化，detached drizzle；合并语义 SKIP / FIELD_MERGE / only-add 保留）+ **FTS rebuild**（importer 责任，in work.sqlite）+ **offline verification**（integrity_check + foreign_key_check + domain checks + FTS 一致）。不合格的 work.sqlite 永不 promote。
 5. **restore journal**（userData sidecar file）写 + per-step write-ahead fsync + `application.relaunch()`（dev mode 不重启 → 提示手动）。
 
-**preboot promotion gate**（`src/main/index.ts` `startApp()` 第一；`application.initPathRegistry()` 后、`await runV2MigrationGate()` 前；**separate sibling `restorePromotionGate.ts`**；db module 导出纯函数，消费窄 journal contract，不知 backup 语义）：校验 `state=='staged'` ∧ **fingerprint** matches ∧ **chainTip** ∈ app bundled chain → checkpoint(TRUNCATE) + close old live → 删 stale -wal/-shm（sidecar hygiene）→ rename live → `live.pre-restore-<restoreId>`（**undo snapshot，zero-copy**）→ rename work → live → **file resources promotion**（按 visibility 序）→ open + integrity_check → journal terminal。**gate never throws**（瞬时失败 → boot old live + report，永不 unbootable）。
+**preboot promotion gate**（`src/main/main.ts` `startApp()` 第一；`application.initPathRegistry()` 后、`await runV2MigrationGate()` 前；**separate sibling `restorePromotionGate.ts`**；db module 导出纯函数，消费窄 journal contract，不知 backup 语义）：校验 `state=='staged'` ∧ **fingerprint** matches ∧ **chainTip** ∈ app bundled chain → checkpoint(TRUNCATE) + close old live → 删 stale -wal/-shm（sidecar hygiene）→ rename live → `live.pre-restore-<restoreId>`（**undo snapshot，zero-copy**）→ rename work → live → **file resources promotion**（按 visibility 序）→ open + integrity_check → journal terminal。**gate never throws**（瞬时失败 → boot old live + report，永不 unbootable）。
 
-**journal contract**（已与 fullex #16714 sync，2026-07-04）：gate condition = **state machine + fingerprint + chainTip**（drop nonce / appVersion / TTL）。
+**journal contract**（已与 @0xfullex #16714 sync，2026-07-04）：gate condition = **state machine + fingerprint + chainTip**（drop nonce / appVersion / TTL）。
 - **state machine**：`staged → promoting → completed/failed/expired`（write-ahead fsync；recovery 看 filesystem reality 幂等 roll forward / back，不盲目 replay = one-shot，故 nonce drop）。
 - **fingerprint** = 主 DB 文件 sha256，post `wal_checkpoint(TRUNCATE)`，assert `busy==0 && checkpointed==log`（WAL 下 mtime / size / header counter 都不更新，checkpoint-hash 唯一无 false-match；两边对称）。
 - **chainTip** = work.sqlite last applied migration `{ folderMillis, hash }`，gate promote 仅当 app bundled migrations chain **含**此 tip（取代 appVersion equality——drizzle `migrate()` 对 ahead-of-chain 是 silent no-op，version equality 会 false-reject 共享 chain 的 patch 升级）。
@@ -266,12 +266,12 @@ export const TOPICS_CONTRIBUTOR = deepFreeze<BackupContributor>({
 
 ---
 
-## 8. 完整 spec 索引（深挖用，标注在配套 openspec change）
+## 8. 完整 spec 索引（深挖用，配套实现 spec）
 
-下列 spec 文件属于配套实现 spec（openspec change `modular-backup-contributors-refined`，实现期工件、非本 repo git 跟踪）。本文档不引用其路径（避免死链），仅列出职责供深挖。
+下列 spec 文件属于配套实现 spec（实现期工件、非本 repo git 跟踪）。本文档不引用其路径（避免死链），仅列出职责供深挖。
 
 ### 框架与注册（capability `modular-backup-contributor`）
-- `proposal.md` — 本变更与 codex 版分歧的裁决（聚合边界、表穷尽归类、稳定主键、omitted 引用派生）。
+- `proposal.md` — 本变更与前序版本分歧的裁决（聚合边界、表穷尽归类、稳定主键、omitted 引用派生）。
 - `design.md` — 设计基线（三层分离、26 不变量矩阵、coverage、行级合并语义、A3 placement/lifecycle 裁决）。
 - `tasks.md` — 实施任务（T0 gate → T1 框架/codegen/registry → T2 14 域 declaration → T3 orchestrator 接入）。
 - `specs/modular-backup-contributor/spec.md` — BackupContributor 三层分离 interface 契约。
@@ -291,7 +291,7 @@ export const TOPICS_CONTRIBUTOR = deepFreeze<BackupContributor>({
 - `specs/backup-restore-safety/backup-service-lifecycle.md` — BackupService lifecycle（WhenReady；编排放 quiesce / journal / relaunch；preboot promotion gate 是 db module 纯函数不经 BackupService）+ ContributorManager non-lifecycle singleton（A3/L304 修订源）+ IPC channel。
 - `specs/backup-restore-safety/export-orchestrator.md` — ExportOrchestrator 5 步流程（VACUUM INTO 复制 → beforeArchive → 收集资源）。
 - `specs/backup-restore-safety/import-orchestrator.md` — ImportOrchestrator 流程（聚合边界冲突策略 → defer FK **detached 写事务**（`withDetachedWriteTx`，**非** live `DbService.withWriteTx`）导入到 **detached work.sqlite** → FTS 重建 in work.sqlite → offline verify）。
-- `specs/backup-restore-safety/restore-barrier.md` — write quiesce（bounded；3 自主 main-side writer + drain in-flight renderer 写；per-owner pause；旧 RESTORE BARRIER runtime silence 的严格子集）+ restore journal（userData sidecar file；state machine + fingerprint + chainTip contract；crash-safety write-ahead fsync；已与 fullex #16714 sync）+ preboot promotion gate（`src/main/index.ts` `startApp()` 第一，`runV2MigrationGate` 前，separate sibling `restorePromotionGate.ts`；atomic rename promotion + undo + file resources visibility 序）。
+- `specs/backup-restore-safety/restore-barrier.md` — write quiesce（bounded；3 自主 main-side writer + drain in-flight renderer 写；per-owner pause；旧 RESTORE BARRIER runtime silence 的严格子集）+ restore journal（userData sidecar file；state machine + fingerprint + chainTip contract；crash-safety write-ahead fsync；已与 @0xfullex #16714 sync）+ preboot promotion gate（`src/main/main.ts` `startApp()` 第一，`runV2MigrationGate` 前，separate sibling `restorePromotionGate.ts`；atomic rename promotion + undo + file resources visibility 序）。
 - `specs/backup-restore-safety/restore-recovery-point.md` — recovery point 流程（manifest 门禁 → migrate-forward → write quiesce + `createSnapshot(work.sqlite)` merge base → detached import + FTS rebuild + offline verify → journal + relaunch → preboot promotion）。
 
 ### 评审记录
