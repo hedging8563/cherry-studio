@@ -938,13 +938,14 @@ describe('edit dialogs', () => {
     expect(screen.getByText('Skill One')).toBeInTheDocument()
   })
 
-  it('shows only built-in tools for pi agents and saves lowercase disabled tools', async () => {
+  it('shows built-in tools and skills (no MCP) for pi agents and saves lowercase disabled tools', async () => {
     render(<AgentEditDialog open resource={PI_AGENT} onOpenChange={vi.fn()} onSaved={vi.fn()} />)
 
     expandToolsMenu()
     expect(screen.getByRole('tab', { name: 'Built-in tools' })).toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'MCP' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('tab', { name: 'Skills' })).not.toBeInTheDocument()
+    // pi supports managed skills now; MCP remains claude-only.
+    expect(screen.getByRole('tab', { name: 'Skills' })).toBeInTheDocument()
 
     selectTab('Built-in tools')
     expect(screen.getByRole('switch', { name: 'Read files' })).toBeInTheDocument()
