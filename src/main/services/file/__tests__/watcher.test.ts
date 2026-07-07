@@ -81,9 +81,8 @@ describe('createDirectoryWatcher', () => {
 
     const w = createDirectoryWatcher(dir as FilePath)
     await waitForReady(w)
-    const addEvent = waitForEvent(w, (e) => e.kind === 'add' && e.path === target)
     await writeFile(target, 'hello')
-    const ev = await addEvent
+    const ev = await waitForEvent(w, (e) => e.kind === 'add' && e.path === target)
     expect(ev.kind).toBe('add')
     expect(
       await danglingCache.check({
@@ -109,9 +108,8 @@ describe('createDirectoryWatcher', () => {
 
     const w = createDirectoryWatcher(dir as FilePath, { stabilityThresholdMs: 0 })
     await waitForReady(w)
-    const unlinkEvent = waitForEvent(w, (e) => e.kind === 'unlink' && e.path === target)
     await rm(target)
-    const ev = await unlinkEvent
+    const ev = await waitForEvent(w, (e) => e.kind === 'unlink' && e.path === target)
     expect(ev.kind).toBe('unlink')
     expect(
       await danglingCache.check({
@@ -139,14 +137,12 @@ describe('createDirectoryWatcher', () => {
     await waitForReady(w)
 
     // First write registers the file (fires 'add'); second write fires 'change'.
-    const addEvent = waitForEvent(w, (e) => e.kind === 'add' && e.path === target)
     await writeFile(target, 'v1')
-    await addEvent
+    await waitForEvent(w, (e) => e.kind === 'add' && e.path === target)
     // Brief settle so chokidar's awaitWriteFinish window closes on the add.
     await new Promise((r) => setTimeout(r, 250))
-    const changeEvent = waitForEvent(w, (e) => e.kind === 'change' && e.path === target)
     await writeFile(target, 'v2-content-larger')
-    const ev = await changeEvent
+    const ev = await waitForEvent(w, (e) => e.kind === 'change' && e.path === target)
     expect(ev.kind).toBe('change')
     await w.close()
   })
@@ -174,9 +170,8 @@ describe('createDirectoryWatcher', () => {
 
     const rootFile = path.join(dir, 'root.txt') as FilePath
     const nestedFile = path.join(nestedDir, 'nested.txt') as FilePath
-    const rootAddEvent = waitForEvent(w, (e) => e.kind === 'add' && e.path === rootFile)
     await writeFile(rootFile, 'root')
-    await rootAddEvent
+    await waitForEvent(w, (e) => e.kind === 'add' && e.path === rootFile)
 
     await writeFile(nestedFile, 'nested')
     await new Promise((r) => setTimeout(r, 400))
@@ -211,9 +206,8 @@ describe('createDirectoryWatcher', () => {
 
       const w = createDirectoryWatcher(dir as FilePath)
       await waitForReady(w)
-      const addEvent = waitForEvent(w, (e) => e.kind === 'add' && e.path?.endsWith('.txt'), 30_000)
       await writeFile(writtenPath, 'hello')
-      const ev = await addEvent
+      const ev = await waitForEvent(w, (e) => e.kind === 'add' && e.path?.endsWith('.txt'), 30_000)
       if (ev.kind !== 'add') throw new Error('expected add event')
       expect(ev.path).toBe(writtenPath)
 
