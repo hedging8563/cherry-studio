@@ -1,6 +1,7 @@
 import type { RouteDef } from '../define'
 import { type AiEventSchemas, aiRequestSchemas } from './ai'
 import { appRequestSchemas } from './app'
+import { type BackupEventSchemas, backupRequestSchemas } from './backup'
 import { type BinaryEventSchemas, binaryRequestSchemas } from './binary'
 import { cherryinRequestSchemas } from './cherryin'
 import { fileRequestSchemas } from './file'
@@ -23,6 +24,7 @@ import { type WindowEventSchemas, windowRequestSchemas } from './window'
 export const ipcRequestSchemas = {
   ...aiRequestSchemas,
   ...appRequestSchemas,
+  ...backupRequestSchemas,
   ...binaryRequestSchemas,
   ...cherryinRequestSchemas,
   ...fileRequestSchemas,
@@ -46,6 +48,7 @@ export type IpcRoute = keyof IpcRequestSchemas
  * its own `*EventSchemas` type here.
  */
 export type IpcEventSchemas = AiEventSchemas &
+  BackupEventSchemas &
   BinaryEventSchemas &
   OAuthEventSchemas &
   SelectionEventSchemas &
