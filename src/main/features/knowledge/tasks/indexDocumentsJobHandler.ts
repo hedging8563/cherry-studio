@@ -29,6 +29,16 @@ import { isDataApiNotFoundError, markKnowledgeItemFailedOnSettled } from './util
 
 const logger = loggerService.withContext('Knowledge:IndexDocumentsJobHandler')
 
+// Chunks per embedMany call while rebuilding an item's material. Small enough to
+// surface incremental progress, large enough to not multiply request overhead.
+const EMBEDDING_PROGRESS_BATCH_SIZE = 20
+const EMBEDDING_PROGRESS_CACHE_TTL_MS = 60_000
+
+/** Purely in-memory, never persisted — see `knowledge.item.embedding_progress.${itemId}` in cacheSchemas.ts. */
+function embeddingProgressCacheKey(itemId: string): `knowledge.item.embedding_progress.${string}` {
+  return `knowledge.item.embedding_progress.${itemId}`
+}
+
 type LoadedIndexDocumentsInput = {
   base: KnowledgeBase
   item: IndexableKnowledgeItem
@@ -90,6 +100,9 @@ export function createIndexDocumentsJobHandler(
       // No base mutation lock here either — same reasoning as the 'reading' status above.
       reportKnowledgeProgress(ctx, 40, { stage: 'embedding', currentFile: 0, totalFiles: 1 })
       knowledgeItemService.updateStatus(ctx.input.itemId, 'embedding')
+      // Reset before the batch loop below so a stale percentage from a prior run
+      // never flashes while the first batch is still in flight.
+      application.get('CacheService').setShared(embeddingProgressCacheKey(item.id), 0, EMBEDDING_PROGRESS_CACHE_TTL_MS)
 
       // Use readableItem, not item: for a freshly captured url it carries the snapshot
       // relativePath, so the material's relative_path is the real `raw/` snapshot path
@@ -279,11 +292,27 @@ async function buildRebuildMaterialInput(
     const store = await vectorStoreService.getIndexStore(base)
     const existingHashes = await store.listExistingEmbeddingHashes([...bodyByHash.keys()])
     const missing = [...bodyByHash.entries()].filter(([hash]) => !existingHashes.has(hash))
-    const vectors = await embedKnowledgeTexts(
-      base,
-      missing.map(([, body]) => body),
-      ctx.signal
-    )
+
+    const cacheService = application.get('CacheService')
+    const progressKey = embeddingProgressCacheKey(item.id)
+    const vectors: number[][] = []
+    for (let i = 0; i < missing.length; i += EMBEDDING_PROGRESS_BATCH_SIZE) {
+      ctx.signal.throwIfAborted()
+      const batch = missing.slice(i, i + EMBEDDING_PROGRESS_BATCH_SIZE)
+      const batchVectors = await embedKnowledgeTexts(
+        base,
+        batch.map(([, body]) => body),
+        ctx.signal
+      )
+      vectors.push(...batchVectors)
+      cacheService.setShared(
+        progressKey,
+        Math.round((vectors.length / missing.length) * 100),
+        EMBEDDING_PROGRESS_CACHE_TTL_MS
+      )
+    }
+    cacheService.deleteShared(progressKey)
+
     embeddings = missing.map(([embeddingTextHash], index) => ({ embeddingTextHash, vector: vectors[index] }))
   }
 

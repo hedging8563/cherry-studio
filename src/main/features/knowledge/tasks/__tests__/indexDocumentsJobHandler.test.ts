@@ -1,4 +1,5 @@
 import { LOCAL_EMBEDDING_UNIQUE_MODEL_ID } from '@shared/data/presets/localEmbedding'
+import { MockMainCacheServiceExport } from '@test-mocks/main/CacheService'
 import { describe, expect, it } from 'vitest'
 
 import { hashEmbeddingText } from '../../vectorstore/indexStore/hashing'
@@ -37,6 +38,15 @@ const DISTINCT_DOCS = ['alpha', 'bravo', 'charlie']
 
 function distinctDocuments() {
   return DISTINCT_DOCS.map((text) => ({ text, metadata: { source: NOTE_ITEM_ID } }))
+}
+
+/**
+ * Word-spaced (not a single featureless run) so the splitter's average
+ * chars-per-token estimate stays realistic and chunkSize:50 reliably yields far
+ * more than one embedding batch (batch size 20).
+ */
+function manyChunksText(): string {
+  return Array.from({ length: 2000 }, (_, i) => `word${i}`).join(' ')
 }
 
 function lastRebuildInput(): RebuildMaterialInput {
@@ -113,6 +123,62 @@ describe('index-documents job handler', () => {
     expect(writtenHashes).toEqual(expect.arrayContaining([hashEmbeddingText('alpha'), hashEmbeddingText('charlie')]))
   })
 
+  it('embeds large items in batches, reporting incremental progress via the shared cache', async () => {
+    const handler = createIndexDocumentsJobHandler(knowledgeLockManager as never)
+    knowledgeBaseGetByIdMock.mockReturnValue(createBase({ chunkSize: 50, chunkOverlap: 0 }))
+    knowledgeItemGetByIdMock.mockReturnValue(createNoteItem(NOTE_ITEM_ID))
+    knowledgeItemUpdateStatusMock.mockReturnValue(createNoteItem(NOTE_ITEM_ID))
+    loadKnowledgeItemDocumentsMock.mockResolvedValueOnce([
+      { text: manyChunksText(), metadata: { source: NOTE_ITEM_ID } }
+    ])
+
+    await handler.execute(createCtx({ baseId: 'kb-1', itemId: NOTE_ITEM_ID, parentJobId: null }))
+
+    expect(embedKnowledgeTextsMock.mock.calls.length).toBeGreaterThan(1)
+    for (const call of embedKnowledgeTextsMock.mock.calls) {
+      expect((call[1] as string[]).length).toBeLessThanOrEqual(20)
+    }
+
+    const progressKey = `knowledge.item.embedding_progress.${NOTE_ITEM_ID}`
+    const cacheService = MockMainCacheServiceExport.cacheService
+    const progressValues = cacheService.setShared.mock.calls
+      .filter(([key]) => key === progressKey)
+      .map(([, value]) => value as number)
+    // Reset to 0 entering the embedding phase, then non-decreasing per-batch
+    // updates ending at 100%.
+    expect(progressValues[0]).toBe(0)
+    expect(progressValues.at(-1)).toBe(100)
+    expect(progressValues).toEqual([...progressValues].sort((a, b) => a - b))
+    // Cleared once the item finishes embedding — no stale percentage left behind.
+    expect(cacheService.deleteShared).toHaveBeenCalledWith(progressKey)
+  })
+
+  it('stops embedding more batches once the job is aborted mid-loop', async () => {
+    const handler = createIndexDocumentsJobHandler(knowledgeLockManager as never)
+    knowledgeBaseGetByIdMock.mockReturnValue(createBase({ chunkSize: 50, chunkOverlap: 0 }))
+    knowledgeItemGetByIdMock.mockReturnValue(createNoteItem(NOTE_ITEM_ID))
+    knowledgeItemUpdateStatusMock.mockReturnValue(createNoteItem(NOTE_ITEM_ID))
+    loadKnowledgeItemDocumentsMock.mockResolvedValueOnce([
+      { text: manyChunksText(), metadata: { source: NOTE_ITEM_ID } }
+    ])
+    const controller = new AbortController()
+    embedKnowledgeTextsMock.mockImplementationOnce(async (_base: unknown, values: string[]) => {
+      // Simulate cancellation arriving while the first batch is in flight.
+      controller.abort()
+      return values.map(fakeEmbedVector)
+    })
+
+    const ctx = {
+      ...createCtx({ baseId: 'kb-1', itemId: NOTE_ITEM_ID, parentJobId: null }),
+      signal: controller.signal
+    }
+
+    await expect(handler.execute(ctx)).rejects.toThrow()
+
+    expect(embedKnowledgeTextsMock).toHaveBeenCalledTimes(1)
+    expect(rebuildMaterialMock).not.toHaveBeenCalled()
+  })
+
   it('does not run local token-limit refinement for non-local embedding models', async () => {
     const handler = createIndexDocumentsJobHandler(knowledgeLockManager as never)
     knowledgeItemGetByIdMock.mockReturnValue(createNoteItem(NOTE_ITEM_ID))
@@ -169,10 +235,10 @@ describe('index-documents job handler', () => {
 
     await handler.execute(createCtx({ baseId: 'kb-1', itemId: NOTE_ITEM_ID, parentJobId: null }))
 
-    // The paid embed seam receives zero bodies (embedKnowledgeTexts itself
-    // short-circuits an empty input before AiService, pinned in embed.test.ts),
-    // and the rebuild reuses the stored vectors: no embeddings re-supplied.
-    expect(embedKnowledgeTextsMock.mock.calls[0][1]).toEqual([])
+    // The batch loop has nothing to embed, so the paid embed seam is never
+    // called at all, and the rebuild reuses the stored vectors: no embeddings
+    // re-supplied.
+    expect(embedKnowledgeTextsMock).not.toHaveBeenCalled()
     expect(lastRebuildInput().embeddings).toEqual([])
     expect(lastRebuildInput().units).toHaveLength(DISTINCT_DOCS.length)
     expect(knowledgeItemUpdateStatusMock).toHaveBeenCalledWith(NOTE_ITEM_ID, 'completed')

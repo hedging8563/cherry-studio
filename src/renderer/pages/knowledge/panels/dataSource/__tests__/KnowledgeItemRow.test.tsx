@@ -10,9 +10,14 @@ import KnowledgeItemRow from '../KnowledgeItemRow'
 import { createDirectoryItem, createFileItem, createUrlItem } from './testUtils'
 
 const mockUseQuery = vi.fn()
+const mockUseSharedCache = vi.fn()
 
 vi.mock('@data/hooks/useDataApi', () => ({
   useQuery: (...args: unknown[]) => mockUseQuery(...args)
+}))
+
+vi.mock('@renderer/data/hooks/useCache', () => ({
+  useSharedCache: (...args: unknown[]) => mockUseSharedCache(...args)
 }))
 
 vi.mock('@renderer/utils/time', () => ({
@@ -161,6 +166,7 @@ describe('KnowledgeItemRow', () => {
       isLoading: false,
       error: undefined
     })
+    mockUseSharedCache.mockReturnValue([null, vi.fn()])
   })
 
   it('renders the file title from the knowledge item path', () => {
@@ -220,6 +226,25 @@ describe('KnowledgeItemRow', () => {
     render(<KnowledgeItemRow item={createFileItem({ id: 'file-1', status: 'reading' })} {...defaultHandlers} />)
 
     expect(screen.getByText('文件处理')).toBeInTheDocument()
+  })
+
+  it('shows the embedding percentage next to the status label while embedding', () => {
+    mockUseSharedCache.mockReturnValue([42, vi.fn()])
+
+    render(<KnowledgeItemRow item={createFileItem({ id: 'file-1', status: 'embedding' })} {...defaultHandlers} />)
+
+    expect(mockUseSharedCache).toHaveBeenCalledWith('knowledge.item.embedding_progress.file-1')
+    expect(screen.getByText('向量化中 42%')).toBeInTheDocument()
+  })
+
+  it('does not show a percentage for a non-embedding status, even with a stale cache value', () => {
+    // A leftover value from a prior run must never leak into a different status's label.
+    mockUseSharedCache.mockReturnValue([42, vi.fn()])
+
+    render(<KnowledgeItemRow item={createFileItem({ id: 'file-1', status: 'completed' })} {...defaultHandlers} />)
+
+    expect(screen.getByText('就绪')).toBeInTheDocument()
+    expect(screen.queryByText(/42%/)).not.toBeInTheDocument()
   })
 
   it('calls onClick when the row is clicked', () => {

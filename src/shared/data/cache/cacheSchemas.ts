@@ -275,6 +275,10 @@ export type SharedCacheSchema = {
   // a concrete job exists. Renderer treats null as cache miss.
   'jobs.state.${jobId}': JobSnapshot | null
   'jobs.progress.${jobId}': JobProgress
+  // Embedding batch progress for a knowledge item, main → all windows. Purely
+  // in-memory: meaningful only while the item's index-documents job is
+  // actively embedding, never persisted, gone on restart.
+  'knowledge.item.embedding_progress.${itemId}': number | null
 }
 
 export const DefaultSharedCache: SharedCacheSchema = {
@@ -294,7 +298,8 @@ export const DefaultSharedCache: SharedCacheSchema = {
   // Template defaults are placeholders never consumed at runtime — concrete
   // keys are populated by JobManager when actual jobs exist.
   'jobs.state.${jobId}': null,
-  'jobs.progress.${jobId}': { progress: 0 }
+  'jobs.progress.${jobId}': { progress: 0 },
+  'knowledge.item.embedding_progress.${itemId}': null
 }
 
 /**

@@ -1,6 +1,7 @@
 import { Checkbox, NormalTooltip } from '@cherrystudio/ui'
 import { cn } from '@cherrystudio/ui/lib/utils'
 import { CommandContextMenu, type CommandContextMenuExtraItem } from '@renderer/components/command'
+import { useSharedCache } from '@renderer/data/hooks/useCache'
 import { getKnowledgeItemFailureReason } from '@renderer/pages/knowledge/utils/error'
 import { toast } from '@renderer/services/toast'
 import { formatErrorMessageWithPrefix } from '@renderer/utils/error'
@@ -28,10 +29,12 @@ export interface KnowledgeItemRowProps {
 
 const KnowledgeItemStatusBadge = ({
   failureReason,
-  status
+  status,
+  embeddingProgress
 }: {
   failureReason: string | null
   status: DataSourceStatusViewModel
+  embeddingProgress: number | null
 }) => {
   const { t } = useTranslation()
   const icon =
@@ -53,7 +56,10 @@ const KnowledgeItemStatusBadge = ({
       tabIndex={failureReason ? 0 : undefined}
       aria-label={failureReason ?? undefined}>
       {icon}
-      <span>{t(status.labelKey)}</span>
+      <span>
+        {t(status.labelKey)}
+        {embeddingProgress != null && ` ${embeddingProgress}%`}
+      </span>
     </span>
   )
 
@@ -92,6 +98,9 @@ const KnowledgeItemRow = ({
   // `failed` carries a reason code in `error` (e.g. a migrated folder whose vectors could not
   // be migrated); surface it as the badge tooltip.
   const failureReason = item.status === 'failed' ? getKnowledgeItemFailureReason(item, t) : null
+  // In-memory only (never persisted, see cacheSchemas.ts) — gone on restart or once the
+  // item's index-documents job leaves the embedding phase.
+  const [embeddingProgress] = useSharedCache(`knowledge.item.embedding_progress.${item.id}` as const)
   const canReindex = item.status === 'completed' || item.status === 'failed'
   const canViewChunks = item.status === 'completed'
   const typeLabel = t(dataSourceTypeDisplayConfig[item.type].filterLabelKey)
@@ -205,7 +214,11 @@ const KnowledgeItemRow = ({
           {typeLabel}
         </div>
         <div role="gridcell">
-          <KnowledgeItemStatusBadge status={status} failureReason={failureReason} />
+          <KnowledgeItemStatusBadge
+            status={status}
+            failureReason={failureReason}
+            embeddingProgress={item.status === 'embedding' ? embeddingProgress : null}
+          />
         </div>
         <div role="gridcell" className="truncate text-foreground-muted text-xs">
           {updatedAt}
