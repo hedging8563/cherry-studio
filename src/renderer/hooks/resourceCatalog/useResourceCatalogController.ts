@@ -66,6 +66,7 @@ export function useResourceCatalogController(resourceType: ResourceCatalogContro
   const [assistantImportOpen, setAssistantImportOpen] = useState(false)
   const [assistantLibraryOpen, setAssistantLibraryOpen] = useState(false)
   const [skillImportOpen, setSkillImportOpen] = useState(false)
+  const [skillMarketplaceOpen, setSkillMarketplaceOpen] = useState(false)
 
   const isAssistantLibrary = resourceType === 'assistant'
 
@@ -238,6 +239,7 @@ export function useResourceCatalogController(resourceType: ResourceCatalogContro
       onCreate: handleCreate,
       onImportAssistant: () => setAssistantImportOpen(true),
       onOpenAssistantLibrary: isAssistantLibrary ? () => setAssistantLibraryOpen(true) : undefined,
+      onOpenSkillMarketplace: () => setSkillMarketplaceOpen(true),
       tags: scopedTags,
       activeTag,
       onTagFilter: setActiveTag,
@@ -258,11 +260,13 @@ export function useResourceCatalogController(resourceType: ResourceCatalogContro
       editDialogOpen,
       selectedSkill,
       skillImportOpen,
+      skillMarketplaceOpen,
       setAssistantImportOpen,
       setAssistantLibraryOpen,
       setDeleteConfirm,
       setSelectedSkill,
       setSkillImportOpen,
+      setSkillMarketplaceOpen,
       handleCreateDialogOpenChange,
       handleEditDialogOpenChange,
       handleEditSaved,
