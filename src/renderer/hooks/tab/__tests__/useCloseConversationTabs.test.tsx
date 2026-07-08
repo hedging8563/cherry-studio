@@ -118,4 +118,72 @@ describe('useCloseConversationTabs', () => {
 
     expect(closeTabs).toHaveBeenCalledWith(['session-a-tab', 'session-b-url-tab'])
   })
+
+  it('keeps the last assistant tab open as the chat empty state when deleting its topic', () => {
+    const closeTabs = vi.fn()
+    const updateTab = vi.fn()
+    const context = {
+      ...createTabsContext(
+        [
+          {
+            id: 'topic-a-tab',
+            type: 'route',
+            url: '/app/chat?topicId=topic-a',
+            title: 'Topic A',
+            metadata: { instanceAppId: 'assistants', instanceKey: 'topic-a' }
+          }
+        ],
+        closeTabs
+      ),
+      updateTab
+    }
+
+    const { result } = renderHook(() => useCloseConversationTabs(), { wrapper: wrapperFor(context) })
+
+    act(() => {
+      result.current('assistants', ['topic-a'])
+    })
+
+    expect(updateTab).toHaveBeenCalledWith('topic-a-tab', {
+      url: '/app/chat',
+      title: expect.any(String),
+      icon: undefined,
+      metadata: undefined
+    })
+    expect(closeTabs).not.toHaveBeenCalled()
+  })
+
+  it('keeps the last agent tab open as the work empty state when deleting its session', () => {
+    const closeTabs = vi.fn()
+    const updateTab = vi.fn()
+    const context = {
+      ...createTabsContext(
+        [
+          {
+            id: 'session-a-tab',
+            type: 'route',
+            url: '/app/agents?sessionId=session-a',
+            title: 'Session A',
+            metadata: { instanceAppId: 'agents', instanceKey: 'session-a' }
+          }
+        ],
+        closeTabs
+      ),
+      updateTab
+    }
+
+    const { result } = renderHook(() => useCloseConversationTabs(), { wrapper: wrapperFor(context) })
+
+    act(() => {
+      result.current('agents', ['session-a'])
+    })
+
+    expect(updateTab).toHaveBeenCalledWith('session-a-tab', {
+      url: '/app/agents',
+      title: expect.any(String),
+      icon: undefined,
+      metadata: undefined
+    })
+    expect(closeTabs).not.toHaveBeenCalled()
+  })
 })

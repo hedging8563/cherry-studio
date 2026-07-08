@@ -663,12 +663,7 @@ const Sessions = ({
         return
       }
 
-      if (!isRightPanel) {
-        setActiveSessionId(null)
-        return
-      }
-
-      // Classic layout scoped to a single agent and now empty: start a fresh draft session for it.
+      // Find the deleted session to start a draft for the same agent.
       const deletedSession =
         filteredGroupedSessions.find((session) => session.id === id) ??
         sessionItemsRef.current.find((session) => session.id === id)
@@ -698,16 +693,7 @@ const Sessions = ({
         setActiveSessionId(null)
       }
     },
-    [
-      activeSessionId,
-      agentIdFilter,
-      deleteSession,
-      filteredGroupedSessions,
-      isRightPanel,
-      onStartDraftSession,
-      setActiveSessionId,
-      t
-    ]
+    [activeSessionId, agentIdFilter, deleteSession, filteredGroupedSessions, onStartDraftSession, setActiveSessionId, t]
   )
 
   const handleRenameSession = useCallback(
@@ -1027,7 +1013,11 @@ const Sessions = ({
             await onActiveAgentDeleted(agentId)
           } else {
             const remaining = sessionItemsRef.current.find((session) => session.agentId !== agentId)
-            setActiveSessionId(remaining?.id ?? null)
+            if (remaining) {
+              setActiveSessionId(remaining.id)
+            } else {
+              await onStartMissingAgentDraft?.()
+            }
           }
         }
 
@@ -1047,6 +1037,7 @@ const Sessions = ({
       deleteAgent,
       deletingAgentId,
       onActiveAgentDeleted,
+      onStartMissingAgentDraft,
       refetchAgents,
       refetchWorkspaces,
       reload,
