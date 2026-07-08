@@ -24,6 +24,10 @@ export interface AgentRuntimeCapabilities {
   soul: boolean
   mcp: boolean
   skills: boolean
+  /** Runtime's built-in tools are surfaced in the agent-tools access list (`useAgentTools`) through
+   *  the Claude tool-registry pipeline. claude-only today — pi's built-ins come from `builtinTools`
+   *  and are not access-controlled ClaudeToolDescriptors, so pi sets this false. */
+  claudeRegistryTools: boolean
   slashCommands: readonly SlashCommand[]
   createDefaults: { permissionMode: AgentPermissionMode; soulEnabled: boolean }
   /** Extra restriction on top of the base agent-friendly filter; null = none. `provider` is
@@ -73,6 +77,7 @@ export const AGENT_RUNTIME_CAPABILITIES = {
     soul: true,
     mcp: true,
     skills: true,
+    claudeRegistryTools: true,
     slashCommands: CLAUDE_CODE_BUILTIN_COMMANDS,
     createDefaults: { permissionMode: 'bypassPermissions', soulEnabled: true },
     // Orphan models stay allowed: isAgentRuntimeSupportedModel skips the provider check when provider is undefined.
@@ -98,6 +103,7 @@ export const AGENT_RUNTIME_CAPABILITIES = {
     // the approval extension (not auto-approved) — see PiRuntimeConnection / piMcpToolAdapter.
     mcp: true,
     skills: true,
+    claudeRegistryTools: false,
     slashCommands: PI_BUILTIN_COMMANDS,
     // Soul is opt-in for pi (createDefaults.soulEnabled stays false, unlike claude's true): pi's
     // autonomy tools run at main-process privilege with no sandbox and pi's create-default permission
