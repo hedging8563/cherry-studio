@@ -71,14 +71,21 @@ export const aiHandlers: IpcHandlersFor<typeof aiRequestSchemas> = {
 
   // ── Agent sessions & tasks — delegate to the owning services. ──
   'ai.prewarm_agent_session': async ({ sessionId }) => {
-    // Skip prewarming a session that's already live/streaming: it would spawn a redundant warm
-    // subprocess for the active connection (e.g. the message-list mount prewarm firing mid-handoff
-    // while the first turn streams). onSessionIdle re-prewarms once the session goes idle.
-    if (application.get('AgentSessionRuntimeService').isSessionBusy(sessionId)) return
-    await application.get('ClaudeCodeWarmQueryManager').prewarmAgentSession(sessionId)
+    // Trace mode needs each connection created fresh with trace env at turn start; priming a
+    // trace-less connection ahead of the turn would have the first traced turn reuse it. Mirror the
+    // old warm-query path and skip prewarm entirely while trace mode is on.
+    if (application.get('ClaudeCodeTraceBridgeService').isTraceModeEnabled()) return
+    // Open the live connection eagerly (not just a warm-query park) so the session's slash-command
+    // catalog is read into the cache before the first message — the warm-query handle can't expose it.
+    // primeConnection is idempotent and keeps an existing (idle-warm or mid-turn) entry connected, so
+    // it already avoids the redundant-subprocess case a busy-session guard would have covered.
+    await application.get('AgentSessionRuntimeService').primeConnection(sessionId)
   },
   'ai.close_agent_session_warm': async ({ sessionId }) => {
     application.get('ClaudeCodeWarmQueryManager').closeAgentSessionWarm(sessionId)
+    // Prewarm now opens a real runtime connection, so releasing the warm-query park alone would leak
+    // the primed subprocess until the idle TTL. Tear it down on view close unless a turn is running.
+    application.get('AgentSessionRuntimeService').releaseIdleConnection(sessionId)
   },
   // The continuation dispatch streams to the caller window, so it needs that window's WebContents.
   'ai.respond_tool_approval': (payload, { senderId }) =>
