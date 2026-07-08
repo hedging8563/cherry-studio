@@ -263,21 +263,7 @@ export default function ProviderList({ selectedProviderId, filterModeHint, onSel
 
   return (
     <aside className={`provider-settings-default-scope ${providerListClasses.shell}`}>
-      <PageHeader
-        title={t('settings.provider.title')}
-        action={
-          <Button
-            variant="outline"
-            size="sm"
-            aria-label={t('settings.provider.add.title')}
-            disabled={dragging}
-            onClick={startAdd}
-            className="hover:bg-[var(--color-surface-hover-soft)] [&_svg]:[stroke-width:var(--icon-stroke)]">
-            <Plus size={14} />
-            {t('common.add')}
-          </Button>
-        }
-      />
+      <PageHeader title={t('settings.provider.title')} />
       <ProviderListSearchField
         value={searchText}
         disabled={dragging}
@@ -291,6 +277,18 @@ export default function ProviderList({ selectedProviderId, filterModeHint, onSel
           />
         }
       />
+      <div className="px-2.5 pb-2.5">
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label={t('settings.provider.add.title')}
+          disabled={dragging}
+          onClick={startAdd}
+          className="w-full hover:bg-[var(--color-surface-hover-soft)] [&_svg]:[stroke-width:var(--icon-stroke)]">
+          <Plus size={14} />
+          {t('common.add')}
+        </Button>
+      </div>
       <ProviderListContent
         providers={providers}
         visibleProviders={filteredProviders}

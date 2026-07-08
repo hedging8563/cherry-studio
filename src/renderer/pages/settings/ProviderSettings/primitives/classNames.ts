@@ -489,9 +489,6 @@ export const oauthCardClasses = {
   loggedInRow:
     'flex w-full min-w-0 flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between',
   profileMeta: 'flex min-w-0 flex-1 items-center gap-3',
-  /** Avatar: 32px round avatar, primary fill, initials (/ CherryIN row). */
-  avatarSm:
-    'flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-control-accent text-xs font-semibold text-control-accent-foreground',
   nameBlock: 'min-w-0',
   nameRow: 'flex flex-wrap items-center gap-1.5',
   name: 'truncate text-(length:--font-size-body-md) leading-[1.2] font-semibold tracking-tight text-foreground',
