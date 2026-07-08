@@ -213,7 +213,7 @@ function ShellHost({ children }: { children: ReactNode }) {
       className={
         isWindow
           ? cn(
-              'mr-1.5 mb-1.5 h-auto rounded-r-[16px] border-y-[0.5px] border-r-[0.5px]',
+              'mr-1.5 mb-1.5 h-auto rounded-r-[16px] border-y-[0.5px] border-r-[0.5px] bg-background',
               isGlassActive ? 'border-frame-border-translucent' : 'border-frame-border',
               '[border-left:0.5px_solid_var(--color-border)]'
             )
