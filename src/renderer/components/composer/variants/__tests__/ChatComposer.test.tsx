@@ -380,12 +380,13 @@ vi.mock('@renderer/data/hooks/usePreference', () => ({
   usePreference: (key: string) => {
     const values: Record<string, unknown> = {
       'app.spell_check.enabled': true,
+      'chat.default_model_id': model.id,
       'chat.message.font_size': 14,
       'chat.narrow_mode': false,
       'chat.input.send_message_shortcut': 'Enter',
       'topic.tab.display_mode': mocks.topicLayout === 'classic' ? 'assistant' : 'time'
     }
-    return [values[key]]
+    return [values[key], key === 'chat.default_model_id' ? mocks.setDefaultModel : vi.fn()]
   }
 }))
 
@@ -545,6 +546,7 @@ describe('ChatComposer', () => {
     mocks.updateTopic.mockReset()
     mocks.setModel.mockReset()
     mocks.setDefaultModel.mockReset()
+    mocks.setDefaultModel.mockResolvedValue(undefined)
     mocks.setFiles.mockReset()
     mocks.setFiles.mockImplementation((value) => {
       mocks.files = typeof value === 'function' ? value(mocks.files ?? []) : value
@@ -854,7 +856,23 @@ describe('ChatComposer', () => {
     fireEvent.click(screen.getByText('select model 2'))
 
     expect(mocks.setModel).toHaveBeenCalledWith(modelB, { enableWebSearch: false })
-    expect(mocks.setMentionedModels).toHaveBeenCalledWith([])
+    expect(mocks.setMentionedModels).toHaveBeenCalledWith([modelB])
+  })
+
+  it('sends the selected single model while the assistant model update is pending', async () => {
+    const onSend = vi.fn()
+    render(<ChatHomeComposer topic={topic} onSend={onSend} />)
+
+    fireEvent.click(screen.getByText('select model 2'))
+
+    await mocks.surfaceProps?.onSendDraft({ text: 'hello', tokens: [] })
+
+    expect(onSend).toHaveBeenCalledWith(
+      'hello',
+      expect.objectContaining({
+        mentionedModels: [modelB.id]
+      })
+    )
   })
 
   it('does not expose selected models as editor tokens', () => {
@@ -950,6 +968,18 @@ describe('ChatComposer', () => {
     expect(screen.getByTestId('composer-below-controls')).not.toHaveTextContent('Default Assistant')
     expect(screen.getByTestId('assistant-selector')).toHaveAttribute('data-value', '')
     expect(mocks.surfaceProps?.sendBlockedReason).toBeUndefined()
+  })
+
+  it('updates the default model from the unlinked home model selector', () => {
+    mocks.assistant = undefined
+
+    render(<ChatHomeComposer topic={unlinkedTopic} onSend={vi.fn()} />)
+
+    fireEvent.click(screen.getByText('select model 2'))
+
+    expect(mocks.setDefaultModel).toHaveBeenCalledWith(modelB.id)
+    expect(mocks.setModel).not.toHaveBeenCalled()
+    expect(mocks.setMentionedModels).toHaveBeenCalledWith([modelB])
   })
 
   it('hides the active assistant trigger from the toolbar in classic layout', () => {
@@ -1580,7 +1610,7 @@ describe('ChatComposer', () => {
 
     fireEvent.click(screen.getByText('select model 2'))
 
-    expect(mocks.setMentionedModels).toHaveBeenCalledWith([])
+    expect(mocks.setMentionedModels).toHaveBeenCalledWith([modelB])
     expect(screen.getByTestId('model-selector')).toHaveAttribute('data-value-count', '1')
     expect(screen.getByTestId('composer-below-controls')).toHaveTextContent('Model B')
     expect(mocks.setModel).toHaveBeenCalledWith(modelB, { enableWebSearch: false })

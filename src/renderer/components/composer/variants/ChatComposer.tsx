@@ -133,7 +133,7 @@ interface ChatComposerContextControlsProps {
   showAssistantTrigger?: boolean
   onDialogCloseAutoFocus?: () => void
   onAssistantChange: (assistantId: string | null) => void | Promise<void>
-  onModelSelect: (model: Model | undefined) => void
+  onModelSelect: (model: Model | undefined) => void | Promise<unknown>
   onMentionedModelsSelect: (models: Model[]) => void
   onMentionedModelMultiSelectModeChange: (enabled: boolean) => void
   onMentionedModelSelectorRestore: () => void
@@ -474,6 +474,7 @@ const ChatComposerInner = ({
   const isClassicTopicLayout = topicDisplayMode === 'assistant'
   const [searching, setSearching] = useCache('chat.web_search.searching')
   const [isMultiSelectMode] = useCache('chat.multi_select_mode')
+  const [, setDefaultModelId] = usePreference('chat.default_model_id')
   const { t } = useTranslation()
   const chatWrite = useChatWrite()
   const { editingMessage, cancelEditing, stopEditing } = useMessageEditing()
@@ -500,12 +501,17 @@ const ChatComposerInner = ({
   const handleModelSelect = useCallback(
     (nextModel: Model | undefined) => {
       if (!nextModel) return
-      if (!assistant) return
+      if (!assistant) {
+        if (assistantId) return
+        return setDefaultModelId(nextModel.id).catch((error: unknown) => {
+          logger.warn('Failed to set default model', error as Error)
+        })
+      }
 
       const enabledWebSearch = canModelUseAssistantWebSearch(nextModel)
       return setModel(nextModel, { enableWebSearch: enabledWebSearch && assistant.settings.enableWebSearch })
     },
-    [assistant, setModel]
+    [assistant, assistantId, setDefaultModelId, setModel]
   )
 
   const {

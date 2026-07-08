@@ -11,7 +11,7 @@ interface UseMentionedModelSelectorParams {
   mentionedModels: Model[]
   setMentionedModels: (models: Model[]) => void
   /** Applies a single model to the assistant (the composer's `handleModelSelect`). */
-  onModelSelect: (model: Model | undefined) => void
+  onModelSelect: (model: Model | undefined) => void | Promise<unknown>
 }
 
 interface UseMentionedModelSelectorResult {
@@ -90,9 +90,9 @@ export function useChatMentionedModels({
         return
       }
 
-      setMentionedModels([])
+      setMentionedModels(nextModels)
       const [nextModel] = nextModels
-      if (nextModel) onModelSelect(nextModel)
+      if (nextModel) void onModelSelect(nextModel)
     },
     [onModelSelect, setMentionedModels]
   )
