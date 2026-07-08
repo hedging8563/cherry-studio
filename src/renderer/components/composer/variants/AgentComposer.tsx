@@ -13,6 +13,7 @@ import {
   useComposerToolLauncherVersion,
   useComposerToolState
 } from '@renderer/components/composer/ComposerToolRuntime'
+import type { ComposerSuggestionSource } from '@renderer/components/composer/quickPanel'
 import { getQuickPanelSearchAliases } from '@renderer/components/composer/quickPanel'
 import { getComposerToolConfig } from '@renderer/components/composer/tools/registry'
 import type { ToolContext } from '@renderer/components/composer/tools/types'
@@ -95,6 +96,7 @@ const ResourceEditDialogHost = React.lazy(() =>
 )
 
 const AGENT_MANAGED_TOKEN_KINDS = ['file', 'skill'] as const satisfies readonly ComposerDraftToken['kind'][]
+const EMPTY_SUGGESTION_SOURCES: readonly ComposerSuggestionSource[] = []
 
 const createSkillQuickPanelItems = (
   skills: readonly LocalSkill[],
@@ -1149,7 +1151,7 @@ const AgentComposerInner = ({
         onActionsChange={handleSurfaceActionsChange}
         getToolLaunchers={() => getLaunchers()}
         toolLaunchersVersion={toolLaunchersVersion}
-        suggestionSources={[]}
+        suggestionSources={EMPTY_SUGGESTION_SOURCES}
         resourceProvider={resourceProvider}
         rootPanelLeadingItems={rootPanelNewSessionItems}
         rootPanelAdditionalItems={rootPanelSkillItems}
