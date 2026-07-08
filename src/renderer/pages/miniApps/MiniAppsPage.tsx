@@ -105,7 +105,7 @@ const MiniAppsPage: FC = () => {
             ) : (
               <div className="grid w-full grid-cols-[repeat(auto-fill,minmax(84px,92px))] justify-center gap-x-3 gap-y-4 px-2 pt-8 pb-8 sm:gap-x-4 md:gap-x-5">
                 {filteredApps.map((app) => (
-                  <App key={app.appId} app={app} size={44} variant="launchpad" onEditCustom={setEditingApp} />
+                  <App key={app.appId} app={app} size={56} variant="launchpad" onEditCustom={setEditingApp} />
                 ))}
               </div>
             )}

@@ -65,6 +65,28 @@ import {
   Zhipu
 } from '@cherrystudio/ui/icons'
 
+// Logo ids whose artwork reads as a complete tile design (rounded-square/circular plate)
+// and renders edge-to-edge in the launchpad tile. Everything else — bare vector marks and
+// wordmark-on-white plates — gets the logo scaled and centered instead. Hand-picked with
+// design review.
+const FULL_BLEED_LOGO_IDS = new Set([
+  '3mintop',
+  'mintop3',
+  'anthropic',
+  'claude',
+  'bolt',
+  'coze',
+  'genspark',
+  'groq',
+  'ima',
+  'lambda',
+  'minimax'
+])
+
+export function isMiniAppLogoFullBleed(logoId: string | undefined): boolean {
+  return !!logoId && FULL_BLEED_LOGO_IDS.has(logoId.toLowerCase())
+}
+
 export function getMiniAppsLogo(LogoId: string | undefined): CompoundIcon | undefined {
   if (!LogoId) {
     return

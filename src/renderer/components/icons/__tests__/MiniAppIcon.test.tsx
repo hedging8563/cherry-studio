@@ -5,8 +5,9 @@ import { describe, expect, it, vi } from 'vitest'
 import MiniAppIcon from '../MiniAppIcon'
 
 vi.mock('@renderer/components/icons/miniAppsLogo', () => ({
+  isMiniAppLogoFullBleed: (logo: unknown) => logo === 'full-bleed-logo',
   getMiniAppsLogo: (logo: unknown) => {
-    if (logo !== 'compound-logo') return logo
+    if (logo !== 'compound-logo' && logo !== 'full-bleed-logo') return logo
     const CompoundLogo = ({
       'aria-label': ariaLabel,
       className,
@@ -86,24 +87,53 @@ describe('MiniAppIcon', () => {
     expect(avatar).not.toHaveClass('[&_[data-slot=avatar-fallback]]:bg-transparent')
   })
 
-  it('renders plain compound icons without avatar chrome', () => {
+  it('centers plain bare-mark icons inside a bordered tile', () => {
     const { container } = render(
       <MiniAppIcon app={{ ...mockApp, logo: 'compound-logo' }} appearance="plain" size={48} />
     )
 
     expect(container.querySelector('[data-testid="compound-logo-avatar"]')).not.toBeInTheDocument()
-    expect(container.querySelector('[data-testid="compound-logo"]')).toBeInTheDocument()
+    const tile = container.firstChild as HTMLElement
+    expect(tile.tagName).toBe('SPAN')
+    expect(tile).toHaveClass('border', 'border-border')
+    expect(tile).toHaveStyle({ width: '48px', height: '48px' })
+    const icon = container.querySelector('[data-testid="compound-logo"]')
+    expect(icon).toBeInTheDocument()
+    expect(icon).toHaveStyle({ width: '74%', height: '74%' })
   })
 
-  it('preserves direct icon sizing and automatic theme variants in plain mode', () => {
+  it('renders plain full-bleed plates edge-to-edge in a borderless clipping tile', () => {
     const { container } = render(
-      <MiniAppIcon app={{ ...mockApp, logo: 'compound-logo' }} appearance="plain" size={40} />
+      <MiniAppIcon app={{ ...mockApp, logo: 'full-bleed-logo' }} appearance="plain" size={40} />
     )
 
-    expect(container.querySelector('[data-testid="compound-logo"]')).toHaveAttribute('data-variant', 'auto')
-    expect(container.querySelector('[data-testid="compound-logo"]')).toHaveStyle({
-      width: '40px',
-      height: '40px'
-    })
+    expect(container.querySelector('[data-testid="compound-logo-avatar"]')).not.toBeInTheDocument()
+    const tile = container.firstChild as HTMLElement
+    expect(tile.tagName).toBe('SPAN')
+    expect(tile).toHaveClass('overflow-hidden')
+    expect(tile).not.toHaveClass('border')
+    expect(tile).toHaveStyle({ width: '40px', height: '40px' })
+    const icon = container.querySelector('[data-testid="compound-logo"]')
+    expect(icon).toBeInTheDocument()
+    expect(icon).toHaveStyle({ width: '108%', height: '108%' })
+  })
+
+  it('borders image logos only when the app is flagged bordered', () => {
+    const { container: bordered } = render(<MiniAppIcon app={mockApp} />)
+    expect(bordered.querySelector('img')).toHaveClass('border', 'border-border')
+
+    const { container: borderless } = render(<MiniAppIcon app={{ ...mockApp, bordered: undefined }} />)
+    expect(borderless.querySelector('img')).not.toHaveClass('border')
+  })
+
+  it('renders bare icons directly without border chrome', () => {
+    const { container } = render(
+      <MiniAppIcon app={{ ...mockApp, logo: 'compound-logo' }} appearance="bare" size={16} />
+    )
+
+    const icon = container.querySelector('[data-testid="compound-logo"]')
+    expect(icon).toBe(container.firstChild)
+    expect(icon).not.toHaveClass('border')
+    expect(icon).toHaveStyle({ width: '16px', height: '16px' })
   })
 })
