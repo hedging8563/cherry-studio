@@ -16,16 +16,15 @@ import { toast } from '@renderer/services/toast'
 import type { Topic } from '@renderer/types/topic'
 import { formatErrorMessageWithPrefix } from '@renderer/utils/error'
 import type { AssistantIconType } from '@shared/data/preference/preferenceTypes'
-import { DEFAULT_ASSISTANT_EMOJI } from '@shared/data/presets/defaultAssistant'
 import { BrushCleaning, Edit3, PinIcon, PinOffIcon, Plus, Smile, Tags, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { buildAssistantEntityItems, DEFAULT_ASSISTANT_ENTITY_ID } from './assistantEntityItems'
 import {
   buildResolvedIconTypeMenuAction,
   buildResolvedResourceEntityMenuAction,
   type ConversationResourceMenuItem,
-  renderAssistantEntityIcon,
   TopicListOptionsMenu
 } from './base'
 import { ResourceEntityRail, type ResourceEntityRailItem } from './ResourceEntityRail'
@@ -40,7 +39,6 @@ const ASSISTANT_ENTITY_CLEAR_TOPICS_ACTION_ID = 'assistant-entity.clear-topics'
 const ASSISTANT_ENTITY_TOGGLE_TAG_GROUPING_ACTION_ID = 'assistant-entity.toggle-tag-grouping'
 const ASSISTANT_ENTITY_ICON_TYPE_ACTION_ID = 'assistant-entity.icon-type'
 const ASSISTANT_ENTITY_DELETE_ACTION_ID = 'assistant-entity.delete'
-const DEFAULT_ASSISTANT_ENTITY_ID = 'assistant-entity:default'
 
 type AssistantResourceListProps = {
   activeAssistantId?: string | null
@@ -122,47 +120,15 @@ export function AssistantResourceList({
 
   const entities = useMemo<ResourceEntityRailItem[]>(() => {
     const hasDefaultAssistantTopics = topics.some((topic) => !topic.assistantId)
-    const defaultAssistantEntity: ResourceEntityRailItem[] = hasDefaultAssistantTopics
-      ? [
-          {
-            id: DEFAULT_ASSISTANT_ENTITY_ID,
-            name: t('chat.default.name'),
-            icon: renderAssistantEntityIcon(
-              assistantIconType,
-              {
-                emoji: DEFAULT_ASSISTANT_EMOJI
-              },
-              defaultModelId
-            ),
-            reorderable: false
-          }
-        ]
-      : []
-
-    return [
-      ...assistants.map((assistant) => {
-        const icon = renderAssistantEntityIcon(
-          assistantIconType,
-          {
-            emoji: assistant.emoji,
-            modelId: assistant.modelId,
-            modelName: assistant.modelName
-          },
-          defaultModelId
-        )
-
-        return {
-          id: assistant.id,
-          name: assistant.name,
-          orderKey: assistant.orderKey,
-          pinned: assistantPinnedIdSet.has(assistant.id),
-          tag: assistant.tags?.[0]?.name,
-          icon
-        }
-      }),
-      ...defaultAssistantEntity
-    ]
-  }, [assistantIconType, assistants, assistantPinnedIdSet, defaultModelId, t, topics])
+    return buildAssistantEntityItems({
+      assistantIconType,
+      assistantPinnedIds,
+      assistants,
+      defaultAssistantName: t('chat.default.name'),
+      defaultModelId,
+      includeDefaultAssistant: hasDefaultAssistantTopics
+    })
+  }, [assistantIconType, assistantPinnedIds, assistants, defaultModelId, t, topics])
 
   const sortTopicsForEntity = useCallback(
     (entityTopics: Topic[]) => sortResourceItemsByPinnedTime(entityTopics, new Date()),
