@@ -14,6 +14,7 @@ import {
 import { usePreference } from '@data/hooks/usePreference'
 import { Icon } from '@iconify/react'
 import { loggerService } from '@logger'
+import { SettingsPageHeader } from '@renderer/components/SettingsPrimitives'
 import { ipcApi, useIpcOn } from '@renderer/ipc'
 import { toast } from '@renderer/services/toast'
 import { formatErrorMessage } from '@renderer/utils/error'
@@ -42,8 +43,6 @@ import type { FC } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { gt as semverGt, valid as semverValid } from 'semver'
-
-import { SettingsPageHeader } from '@renderer/components/SettingsPrimitives'
 
 const logger = loggerService.withContext('EnvironmentDependencies')
 
@@ -416,21 +415,21 @@ const BinaryToolPresetCard: FC<{
                 {installedVersion && (
                   <Badge
                     variant="outline"
-                    className="gap-1 border-transparent bg-success/10 px-1.5 py-0 text-[11px] text-success leading-4">
+                    className="gap-1 border-transparent bg-success-bg px-1.5 py-0 text-[11px] text-success leading-4">
                     v{installedVersion}
                   </Badge>
                 )}
                 {latestVersion && (
                   <Badge
                     variant="outline"
-                    className="gap-1 border-success/40 bg-success/10 px-1.5 py-0 text-[11px] text-success leading-4">
+                    className="gap-1 border-success-border bg-success-bg px-1.5 py-0 text-[11px] text-success leading-4">
                     <ArrowBigUp className="size-2.5" />v{latestVersion}
                   </Badge>
                 )}
                 {isBundled && (
                   <Badge
                     variant="outline"
-                    className="gap-1 border-transparent bg-info/10 px-1.5 py-0 text-[11px] text-info leading-4">
+                    className="gap-1 border-transparent bg-info-bg px-1.5 py-0 text-[11px] text-info leading-4">
                     <Package />
                     {t('settings.dependencies.source.bundled')}
                   </Badge>
@@ -442,7 +441,7 @@ const BinaryToolPresetCard: FC<{
                       onClick={onUpdate}
                       disabled={installing}
                       title={t('settings.dependencies.update')}
-                      className="inline-flex cursor-pointer items-center gap-0.5 rounded-full bg-warning/10 px-1.5 py-0 text-[11px] text-warning leading-4 transition-colors hover:bg-warning/20 disabled:cursor-default disabled:opacity-40">
+                      className="inline-flex cursor-pointer items-center gap-0.5 rounded-full bg-warning-bg px-1.5 py-0 text-[11px] text-warning leading-4 transition-colors hover:bg-warning-bg-hover disabled:cursor-default disabled:opacity-40">
                       {installing ? (
                         <Loader2 className="size-3 motion-safe:animate-spin" />
                       ) : (
@@ -456,7 +455,7 @@ const BinaryToolPresetCard: FC<{
                       disabled={installing}
                       title={t('settings.dependencies.remove')}
                       aria-label={t('settings.dependencies.remove')}
-                      className="inline-flex cursor-pointer items-center rounded-full bg-destructive/10 px-1.5 py-0.5 text-destructive transition-colors hover:bg-destructive/20 disabled:cursor-default disabled:opacity-40">
+                      className="inline-flex cursor-pointer items-center rounded-full bg-error-bg px-1.5 py-0.5 text-destructive transition-colors hover:bg-error-bg-hover disabled:cursor-default disabled:opacity-40">
                       <Trash2 className="size-3" />
                     </button>
                   </>
@@ -555,7 +554,7 @@ const CustomToolCard: FC<{
                 {latestVersion && (
                   <Badge
                     variant="outline"
-                    className="gap-1 border-success/40 bg-success/10 px-1.5 py-0 text-[11px] text-success leading-4">
+                    className="gap-1 border-success-border bg-success-bg px-1.5 py-0 text-[11px] text-success leading-4">
                     <ArrowBigUp className="size-2.5" />v{latestVersion}
                   </Badge>
                 )}

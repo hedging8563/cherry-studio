@@ -47,7 +47,8 @@ interface ModelSettingRowProps {
 }
 
 const ModelSettingRow: FC<ModelSettingRowProps> = ({ icon, title, tip, description, compact, children }) => (
-  <SettingRow className={cn('rounded-xl border border-border/60 px-4 py-3', compact && 'flex-col items-stretch gap-3')}>
+  <SettingRow
+    className={cn('rounded-xl border border-border-muted px-4 py-3', compact && 'flex-col items-stretch gap-3')}>
     <div className="min-w-0 flex-1">
       <SettingRowTitle
         tip={tip}

@@ -265,5 +265,5 @@ export const SettingGroup = ({
 // Card shell for a group's rows — SettingTitle stays outside, rows go inside.
 // Direct children get uniform row padding via the `*:` variant.
 export const SettingCard = ({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) => (
-  <div className={cn('mt-3 rounded-xl border border-border/60 py-1.5 *:px-4 *:py-1.5', className)} {...props} />
+  <div className={cn('mt-3 rounded-xl border border-border-muted py-1.5 *:px-4 *:py-1.5', className)} {...props} />
 )
