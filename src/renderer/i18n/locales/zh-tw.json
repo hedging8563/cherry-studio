@@ -5096,7 +5096,7 @@
         "r_regenerate": "R 重新產生"
       }
     },
-    "description": "[to be translated]:Select any text to instantly translate, explain, summarize, and more",
+    "description": "選取任意文字，立即執行翻譯、解釋、總結等快速操作",
     "name": "劃詞助手",
     "settings": {
       "actions": {
@@ -7233,7 +7233,7 @@
     },
     "quickAssistant": {
       "click_tray_to_show": "點選工具列圖示啟動",
-      "description": "[to be translated]:A lightweight AI assistant summoned anytime via shortcut or tray",
+      "description": "透過快捷鍵或工具列圖示隨時喚起的輕量 AI 助手",
       "enable_quick_assistant": "啟用快捷助手",
       "read_clipboard_at_startup": "啟動時讀取剪貼簿",
       "title": "快捷助手",
