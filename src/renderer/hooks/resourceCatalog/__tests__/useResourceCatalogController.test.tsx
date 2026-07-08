@@ -1,3 +1,4 @@
+import { toast } from '@renderer/services/toast'
 import type { ResourceItem } from '@renderer/types/resourceCatalog'
 import type { UniqueModelId } from '@shared/data/types/model'
 import { act, renderHook, waitFor } from '@testing-library/react'
@@ -21,8 +22,7 @@ const controllerMocks = vi.hoisted(() => ({
     isLoading: false,
     resources: [] as ResourceItem[]
   },
-  saveFile: vi.fn(),
-  toastError: vi.fn()
+  saveFile: vi.fn()
 }))
 
 vi.mock('react-i18next', () => ({
@@ -110,8 +110,7 @@ describe('useResourceCatalogController', () => {
           ...window.api.file,
           save: controllerMocks.saveFile
         }
-      },
-      toast: { ...window.toast, error: controllerMocks.toastError }
+      }
     })
   })
 
@@ -183,7 +182,7 @@ describe('useResourceCatalogController', () => {
       await result.current.gridProps.onDuplicate(assistantResource)
     })
 
-    expect(controllerMocks.toastError).toHaveBeenCalledWith('duplicate failed')
+    expect(toast.error).toHaveBeenCalledWith('duplicate failed')
     expect(controllerMocks.refetch).not.toHaveBeenCalled()
   })
 
@@ -196,7 +195,7 @@ describe('useResourceCatalogController', () => {
     })
 
     await waitFor(() => {
-      expect(controllerMocks.toastError).toHaveBeenCalledWith('export failed')
+      expect(toast.error).toHaveBeenCalledWith('export failed')
     })
   })
 
