@@ -100,6 +100,7 @@ export const MockCherrystudioUI = {
   Input: (props: InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
   Label: ({ children, ...props }: { children?: ReactNode }) => <label {...props}>{children}</label>,
   RowFlex: ({ children, ...props }: { children?: ReactNode }) => <div {...props}>{children}</div>,
+  Scrollbar: ({ children, ...props }: { children?: ReactNode }) => <div {...props}>{children}</div>,
   SelectDropdown: ({ items, onSelect, renderItem, renderSelected, selectedId, placeholder }: any) => {
     const selected = items.find((item: { id: string }) => item.id === selectedId)
     return (
