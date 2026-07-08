@@ -18,8 +18,8 @@
 //
 // Preset: full only (lite-excluded — files are large blobs).
 
-import type { BackupContributor } from '@main/data/db/backup/contributor-types'
 import type { BackupReadonlyDb } from '@main/data/db/backup/contexts'
+import type { BackupContributor } from '@main/data/db/backup/contributor-types'
 import { columns, mirrorPk, table } from '@main/data/db/backup/dbSchemaRefs'
 import { deepFreeze } from '@main/data/db/backup/freeze'
 import { fileEntryTable } from '@main/data/db/schemas/file'
@@ -33,10 +33,7 @@ import { isNull } from 'drizzle-orm'
  * missing/unreadable rather than failing the whole export.
  */
 export async function collectFileEntryIds(liveDb: BackupReadonlyDb): Promise<Set<string>> {
-  const rows = await liveDb
-    .select()
-    .from(fileEntryTable)
-    .where(isNull(fileEntryTable.deletedAt))
+  const rows = await liveDb.select().from(fileEntryTable).where(isNull(fileEntryTable.deletedAt))
   return new Set(rows.map((r) => r.id))
 }
 

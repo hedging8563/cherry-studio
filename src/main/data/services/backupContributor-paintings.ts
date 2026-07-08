@@ -17,8 +17,8 @@
 //
 // Preset: full only (lite-excluded — painting images are large file blobs).
 
-import type { BackupContributor } from '@main/data/db/backup/contributor-types'
 import type { BackupReadonlyDb } from '@main/data/db/backup/contexts'
+import type { BackupContributor } from '@main/data/db/backup/contributor-types'
 import { column, columns, mirrorPk, table } from '@main/data/db/backup/dbSchemaRefs'
 import { deepFreeze } from '@main/data/db/backup/freeze'
 import { paintingFileRefTable } from '@main/data/db/schemas/fileRelations'

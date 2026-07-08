@@ -19,8 +19,8 @@
 //
 // Preset: full + lite (chat history is a core migrate scenario).
 
-import type { BackupContributor } from '@main/data/db/backup/contributor-types'
 import type { BackupReadonlyDb } from '@main/data/db/backup/contexts'
+import type { BackupContributor } from '@main/data/db/backup/contributor-types'
 import { column, columns, mirrorPk, table } from '@main/data/db/backup/dbSchemaRefs'
 import { deepFreeze } from '@main/data/db/backup/freeze'
 import { chatMessageFileRefTable } from '@main/data/db/schemas/fileRelations'
@@ -129,7 +129,11 @@ export const TOPICS_CONTRIBUTOR = deepFreeze<BackupContributor>({
     // message JSON columns that carry NO soft refs (data IS a jsonSoftReference —
     // NOT exempt). Declared so finalize #12 exhaustiveness passes.
     exemptJsonCols: [
-      { table: table('message'), column: column('modelSnapshot'), reason: 'no soft refs — holds a frozen snapshot of the model config at send time' },
+      {
+        table: table('message'),
+        column: column('modelSnapshot'),
+        reason: 'no soft refs — holds a frozen snapshot of the model config at send time'
+      },
       { table: table('message'), column: column('stats'), reason: 'no soft refs — holds token/usage statistics' }
     ]
   },

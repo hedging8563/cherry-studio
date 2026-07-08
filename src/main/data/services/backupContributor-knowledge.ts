@@ -19,8 +19,8 @@
 //
 // Preset: full only (lite-excluded — knowledge bases are large).
 
-import type { BackupContributor } from '@main/data/db/backup/contributor-types'
 import type { BackupReadonlyDb } from '@main/data/db/backup/contexts'
+import type { BackupContributor } from '@main/data/db/backup/contributor-types'
 import { column, columns, mirrorPk, table } from '@main/data/db/backup/dbSchemaRefs'
 import { deepFreeze } from '@main/data/db/backup/freeze'
 import { knowledgeBaseTable } from '@main/data/db/schemas/knowledge'
@@ -85,7 +85,12 @@ export const KNOWLEDGE_CONTRIBUTOR = deepFreeze<BackupContributor>({
     // soft ref. File blobs are collected via collectFileResources ({baseId}/ dir),
     // not via this JSON column. Declared so finalize #12 exhaustiveness passes.
     exemptJsonCols: [
-      { table: table('knowledge_item'), column: column('data'), reason: 'no soft refs — holds source/relativePath file descriptor; blobs collected via {baseId}/ directory, not via this column' }
+      {
+        table: table('knowledge_item'),
+        column: column('data'),
+        reason:
+          'no soft refs — holds source/relativePath file descriptor; blobs collected via {baseId}/ directory, not via this column'
+      }
     ]
   },
   backupPolicy: {},
