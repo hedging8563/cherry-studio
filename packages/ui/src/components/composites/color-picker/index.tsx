@@ -328,14 +328,16 @@ export const ColorPickerHue = ({ className, 'aria-label': ariaLabel, ...props }:
   const { hue, setHue } = useColorPicker()
 
   return (
+    // Pass-through props are spread first: value/onValueChange (and the slider
+    // geometry) are owned by the picker context and must not be overridable.
     <SliderPrimitive.Root
+      {...props}
       className={cn('relative flex h-4 w-full touch-none', className)}
       max={360}
       onValueChange={([hue]) => setHue(hue)}
       step={1}
       value={[hue]}
-      aria-label={ariaLabel ?? 'Hue'}
-      {...props}>
+      aria-label={ariaLabel ?? 'Hue'}>
       <SliderPrimitive.Track className="relative my-0.5 h-3 w-full grow rounded-full bg-[linear-gradient(90deg,#FF0000,#FFFF00,#00FF00,#00FFFF,#0000FF,#FF00FF,#FF0000)]">
         <SliderPrimitive.Range className="absolute h-full" />
       </SliderPrimitive.Track>
@@ -350,14 +352,16 @@ export const ColorPickerAlpha = ({ className, 'aria-label': ariaLabel, ...props 
   const { alpha, setAlpha } = useColorPicker()
 
   return (
+    // Pass-through props are spread first: value/onValueChange (and the slider
+    // geometry) are owned by the picker context and must not be overridable.
     <SliderPrimitive.Root
+      {...props}
       className={cn('relative flex h-4 w-full touch-none', className)}
       max={100}
       onValueChange={([alpha]) => setAlpha(alpha)}
       step={1}
       value={[alpha]}
-      aria-label={ariaLabel ?? 'Alpha'}
-      {...props}>
+      aria-label={ariaLabel ?? 'Alpha'}>
       <SliderPrimitive.Track className="relative my-0.5 h-3 w-full grow rounded-full bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMUlEQVQ4T2NkYGAQYcAP3uCTZhw1gGGYhAGBZIA/nYDCgBDAm9BGDWAAJyRCgLaBCAAgXwixzAS0pgAAAABJRU5ErkJggg==')] bg-center bg-repeat-x dark:bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAALklEQVR4nGP8+vWrCAMewM3N/QafPBM+SWLAqAGDwQBGQgoIpZOB98KoAVQwAADxzQcSVIRCfQAAAABJRU5ErkJggg==')]">
         <div className="absolute inset-0 rounded-full bg-gradient-to-r from-transparent to-black/50 dark:to-white/50" />
         <SliderPrimitive.Range className="absolute h-full rounded-full bg-transparent" />
