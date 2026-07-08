@@ -74,6 +74,13 @@ const safeColor = (
   }
 }
 
+// Percent-granularity alpha matches the 0–100 step of the alpha slider; rounded
+// RGB matches the integer contract of the onChange tuple.
+const rgbaKey = (color: ReturnType<typeof Color>): string => {
+  const [r, g, b] = color.rgb().array()
+  return `${Math.round(r)},${Math.round(g)},${Math.round(b)}/${Math.round(color.alpha() * 100)}`
+}
+
 export const ColorPicker = ({ value, defaultValue = '#000000', onChange, className, ...props }: ColorPickerProps) => {
   // Seed from the controlled value when present, otherwise the default. Read each
   // channel directly (no `||` fallback): a legitimate zero channel — a grayscale
@@ -94,28 +101,12 @@ export const ColorPicker = ({ value, defaultValue = '#000000', onChange, classNa
   // parent re-feeds its own value back in (mount, controlled prop changes).
   const shouldNotify = useRef(false)
 
-  // Update color when controlled value changes
-  useEffect(() => {
-    if (value === undefined) return
-    let next: ReturnType<typeof Color>
-    try {
-      next = Color(value)
-    } catch {
-      return
-    }
-    shouldNotify.current = false
-    const [h, s, l] = next.hsl().array()
-
-    setHue(h)
-    setSaturation(s)
-    setLightness(l)
-    setAlpha(next.alpha() * 100)
-  }, [value])
-
   // Notify parent only when the change originated from a setter wrapper. React
   // batches multiple setX calls inside one event handler (e.g. ColorPickerSelection's
   // sat+light pair) into a single re-render, so this fires exactly once per
-  // user interaction tick.
+  // user interaction tick. Declared before the resync effect: on a rejected
+  // change the resync reverts state in the same commit, and onChange must have
+  // fired from the interaction state before that happens.
   useEffect(() => {
     if (!shouldNotify.current) return
     shouldNotify.current = false
@@ -128,6 +119,31 @@ export const ColorPicker = ({ value, defaultValue = '#000000', onChange, classNa
       onChange([Math.round(rgba[0]), Math.round(rgba[1]), Math.round(rgba[2]), alpha / 100])
     }
   }, [hue, saturation, lightness, alpha, onChange])
+
+  // Controlled mode: resync internal HSL state whenever it stops representing
+  // `value` — that covers external value changes AND rejected/debounced changes,
+  // where onChange fired but the parent kept (or has not yet committed) the old
+  // value, so a value-identity effect would never run. Comparing at the rounded
+  // rgba level (instead of resyncing on every echo) keeps hue/saturation intact
+  // through HSL-degenerate colors like black/white/greys.
+  useEffect(() => {
+    if (value === undefined) return
+    let next: ReturnType<typeof Color>
+    try {
+      next = Color(value)
+    } catch {
+      return
+    }
+    const internal = Color.hsl(hue, saturation, lightness).alpha(alpha / 100)
+    if (rgbaKey(internal) === rgbaKey(next)) return
+    shouldNotify.current = false
+    const [h, s, l] = next.hsl().array()
+
+    setHue(h)
+    setSaturation(s)
+    setLightness(l)
+    setAlpha(next.alpha() * 100)
+  }, [value, hue, saturation, lightness, alpha])
 
   const notifyHue = useCallback((h: number) => {
     shouldNotify.current = true
