@@ -35,7 +35,7 @@ import { findLatestUpdated, isUntouchedSinceCreation } from '@renderer/utils/res
 import { getDefaultRouteTitle } from '@renderer/utils/routeTitle'
 import { cn } from '@renderer/utils/style'
 import { getTabInstanceKey } from '@renderer/utils/tabInstanceMetadata'
-import type { AgentSessionEntity } from '@shared/data/api/schemas/agentSessions'
+import { AGENT_SESSION_STATUS, type AgentSessionEntity } from '@shared/data/api/schemas/agentSessions'
 import { AGENT_WORKSPACE_TYPE, type AgentSessionWorkspaceSource } from '@shared/data/api/schemas/agentWorkspaces'
 import { buildFirstUserMessageTitle } from '@shared/utils/conversationTitle'
 import { MIN_WINDOW_HEIGHT, SECOND_MIN_WINDOW_WIDTH } from '@shared/utils/window'
@@ -789,8 +789,9 @@ const AgentPage = () => {
   )
 
   // Eagerly create + prewarm the real session for the current draft when the user starts typing, so
-  // the first send reuses a warm Claude Code subprocess. Idempotent per draft; the row stays out of
-  // the session list (no cache invalidation) until the send actually adopts it.
+  // the first send reuses a warm Claude Code subprocess. Idempotent per draft. The row is created with
+  // status 'reserved', so it is excluded from list/search queries (not merely hidden by skipping cache
+  // invalidation) until the send flips it to 'active'.
   const reserveDraftSession = useCallback(() => {
     if (reservedSessionRef.current) return
     const current = draftSessionRef.current
@@ -799,7 +800,12 @@ const AgentPage = () => {
     const promise = (async (): Promise<PersistentAgentSessionConversation | null> => {
       try {
         const session = await dataApiService.post('/agent-sessions', {
-          body: { agentId: current.agentId, name: t('common.unnamed'), workspace: current.workspaceSource }
+          body: {
+            agentId: current.agentId,
+            name: t('common.unnamed'),
+            workspace: current.workspaceSource,
+            status: AGENT_SESSION_STATUS.RESERVED
+          }
         })
         // Await registration (the IPC returns once the warm entry is registered, not once the
         // subprocess startup finishes). If the user sends right after the first keystroke, consume()
@@ -846,18 +852,18 @@ const AgentPage = () => {
         if (reservedPersisted) {
           let persisted = reservedPersisted
           const name = temporaryTitle || reservedPersisted.name
-          if (name !== reservedPersisted.name) {
-            try {
-              // Await the rename so finalizeHandoff's cache invalidation revalidates against the
-              // persisted name (not the placeholder), and a failed rename can't leave the UI showing
-              // a name the DB never stored — hand off the row the server actually returned.
-              const renamed = await dataApiService.patch(`/agent-sessions/${reservedPersisted.sessionId}`, {
-                body: { name }
-              })
-              persisted = { ...reservedPersisted, name: renamed.name, session: renamed }
-            } catch (error) {
-              logger.warn('Failed to name adopted session', error as Error)
-            }
+          const nameChanged = name !== reservedPersisted.name
+          try {
+            // Flip 'reserved' → 'active' so the adopted session enters list/search, folding in the
+            // first-message title when it differs from the placeholder. Always PATCHes (the status
+            // flip is required even when the title is unchanged), and is awaited so finalizeHandoff's
+            // cache invalidation revalidates against the row the server actually returned.
+            const patched = await dataApiService.patch(`/agent-sessions/${reservedPersisted.sessionId}`, {
+              body: { status: AGENT_SESSION_STATUS.ACTIVE, ...(nameChanged ? { name } : {}) }
+            })
+            persisted = { ...reservedPersisted, name: patched.name, session: patched }
+          } catch (error) {
+            logger.warn('Failed to activate adopted session', error as Error)
           }
           finalizeHandoff(persisted)
           return persisted

@@ -91,6 +91,20 @@ export type CreateAgentSessionMessagesDto = z.infer<typeof CreateAgentSessionMes
  */
 export const SessionNameEntitySchema = z.string().max(255)
 
+/**
+ * Session lifecycle status.
+ * - `reserved`: created eagerly to prewarm a Claude Code subprocess for a new-chat draft the user is
+ *   typing but has not yet sent. Excluded from list/search and swept at boot if orphaned by a crash.
+ * - `active`: a committed session, flipped from `reserved` on first send (or created directly).
+ */
+export const AGENT_SESSION_STATUSES = ['reserved', 'active'] as const
+export type AgentSessionStatus = (typeof AGENT_SESSION_STATUSES)[number]
+export const AGENT_SESSION_STATUS = {
+  RESERVED: 'reserved',
+  ACTIVE: 'active'
+} as const satisfies Record<string, AgentSessionStatus>
+export const AgentSessionStatusSchema = z.enum(AGENT_SESSION_STATUSES)
+
 export const AgentSessionEntitySchema = z.strictObject({
   id: z.string(),
   agentId: z.string().nullable(),
@@ -102,6 +116,7 @@ export const AgentSessionEntitySchema = z.strictObject({
   workspace: AgentWorkspaceEntitySchema,
   /** Container-level OTel trace id — one trace tree per session. */
   traceId: TraceIdSchema.optional(),
+  status: AgentSessionStatusSchema,
   orderKey: z.string(),
   createdAt: z.string(),
   updatedAt: z.string()
@@ -113,7 +128,9 @@ export const CreateAgentSessionSchema = z.strictObject({
   agentId: z.string().min(1),
   name: SessionNameEntitySchema,
   description: z.string().optional(),
-  workspace: AgentSessionWorkspaceSourceSchema
+  workspace: AgentSessionWorkspaceSourceSchema,
+  // Draft-prewarm reservation opts in with `'reserved'`; omitted → `'active'` (a normal session).
+  status: AgentSessionStatusSchema.optional()
 })
 export type CreateAgentSessionDto = z.infer<typeof CreateAgentSessionSchema>
 
@@ -121,7 +138,9 @@ export const UpdateAgentSessionSchema = z.strictObject({
   name: SessionNameEntitySchema.optional(),
   isNameManuallyEdited: z.boolean().optional(),
   description: z.string().optional(),
-  agentId: z.string().min(1).optional()
+  agentId: z.string().min(1).optional(),
+  // Flip `reserved` → `active` when the draft's first message is sent (see AgentPage adopt path).
+  status: AgentSessionStatusSchema.optional()
 })
 
 export type UpdateAgentSessionDto = z.infer<typeof UpdateAgentSessionSchema>

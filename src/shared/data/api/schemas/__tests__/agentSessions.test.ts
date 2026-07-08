@@ -93,6 +93,24 @@ describe('AgentSession schemas', () => {
     })
   })
 
+  it('accepts an optional reserved status on create and a status flip on update', () => {
+    expect(
+      CreateAgentSessionSchema.safeParse({
+        agentId: 'agent-1',
+        name: '',
+        workspace: { type: 'system' },
+        status: 'reserved'
+      }).success
+    ).toBe(true)
+    // Status is optional on create (omitted → the DB default of 'active').
+    expect(
+      CreateAgentSessionSchema.safeParse({ agentId: 'agent-1', name: '', workspace: { type: 'system' } }).success
+    ).toBe(true)
+    expect(UpdateAgentSessionSchema.parse({ status: 'active' })).toEqual({ status: 'active' })
+    // Only the two known lifecycle values are accepted.
+    expect(UpdateAgentSessionSchema.safeParse({ status: 'bogus' }).success).toBe(false)
+  })
+
   it('allows blank names for untitled placeholder sessions', () => {
     expect(
       CreateAgentSessionSchema.safeParse({

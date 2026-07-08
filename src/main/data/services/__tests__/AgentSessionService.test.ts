@@ -7,6 +7,7 @@ import { pinTable } from '@data/db/schemas/pin'
 import { agentSessionService } from '@data/services/AgentSessionService'
 import { agentWorkspaceService } from '@data/services/AgentWorkspaceService'
 import { ErrorCode } from '@shared/data/api/errors'
+import { AGENT_SESSION_STATUS } from '@shared/data/api/schemas/agentSessions'
 import type { AgentWorkspaceEntity } from '@shared/data/api/schemas/agentWorkspaces'
 import { setupTestDatabase } from '@test-helpers/db'
 import { eq } from 'drizzle-orm'
@@ -692,5 +693,82 @@ describe('AgentSessionService', () => {
 
     const rows = await dbh.db.select().from(agentWorkspaceTable)
     expect(rows).toHaveLength(0)
+  })
+
+  describe('reserved status', () => {
+    it('defaults new sessions to active and persists an explicit reserved status', async () => {
+      const active = await createSession('Active default')
+      expect(active.status).toBe(AGENT_SESSION_STATUS.ACTIVE)
+
+      const workspace = await createWorkspace('reserved-ws')
+      const reserved = agentSessionService.create({
+        agentId: 'agent-session-test',
+        name: 'Reserved',
+        workspace: { type: 'user', workspaceId: workspace.id },
+        status: AGENT_SESSION_STATUS.RESERVED
+      })
+      expect(reserved.status).toBe(AGENT_SESSION_STATUS.RESERVED)
+      // getById must still see reserved rows — the warm-query builder and the flip both read through it.
+      expect(agentSessionService.getById(reserved.id).status).toBe(AGENT_SESSION_STATUS.RESERVED)
+    })
+
+    it('excludes reserved sessions from listByCursor and search but surfaces them once activated', async () => {
+      const active = await createSession('Visible active')
+      const workspace = await createWorkspace('reserved-hidden-ws')
+      const reserved = agentSessionService.create({
+        agentId: 'agent-session-test',
+        name: 'Hidden reserved',
+        workspace: { type: 'user', workspaceId: workspace.id },
+        status: AGENT_SESSION_STATUS.RESERVED
+      })
+
+      const listedIds = agentSessionService.listByCursor().items.map((s) => s.id)
+      expect(listedIds).toContain(active.id)
+      expect(listedIds).not.toContain(reserved.id)
+      expect(agentSessionService.search({ q: 'reserved', limit: 10 }).map((s) => s.id)).not.toContain(reserved.id)
+
+      // Flip to active → now visible in both list and search.
+      agentSessionService.update(reserved.id, { status: AGENT_SESSION_STATUS.ACTIVE })
+      expect(agentSessionService.listByCursor().items.map((s) => s.id)).toContain(reserved.id)
+      expect(agentSessionService.search({ q: 'Hidden reserved', limit: 10 }).map((s) => s.id)).toContain(reserved.id)
+    })
+
+    it('sweeps message-less reserved sessions (cascading their system workspace) at boot', async () => {
+      const reserved = agentSessionService.create({
+        agentId: 'agent-session-test',
+        name: 'Orphan reserve',
+        workspace: { type: 'system' },
+        status: AGENT_SESSION_STATUS.RESERVED
+      })
+
+      const removed = agentSessionService.sweepReservedSessions()
+
+      expect(removed).toBe(1)
+      expect(captureError(() => agentSessionService.getById(reserved.id))).toMatchObject({ code: ErrorCode.NOT_FOUND })
+      // System workspace cascaded away with the reserved session.
+      expect(
+        await dbh.db.select().from(agentWorkspaceTable).where(eq(agentWorkspaceTable.id, reserved.workspaceId))
+      ).toHaveLength(0)
+    })
+
+    it('never sweeps active empty sessions or reserved sessions that already hold messages', async () => {
+      // An active, message-less session (the case the old zero-message sweep wrongly deleted).
+      const activeEmpty = await createSession('Active but empty')
+      // A reserved session that somehow accrued a message (adopt flip failed but the send landed).
+      const workspace = await createWorkspace('reserved-with-msg-ws')
+      const reservedWithMessage = agentSessionService.create({
+        agentId: 'agent-session-test',
+        name: 'Reserved with message',
+        workspace: { type: 'user', workspaceId: workspace.id },
+        status: AGENT_SESSION_STATUS.RESERVED
+      })
+      await insertSessionMessage(reservedWithMessage.id, 'msg-on-reserved')
+
+      const removed = agentSessionService.sweepReservedSessions()
+
+      expect(removed).toBe(0)
+      expect(agentSessionService.getById(activeEmpty.id).id).toBe(activeEmpty.id)
+      expect(agentSessionService.getById(reservedWithMessage.id).id).toBe(reservedWithMessage.id)
+    })
   })
 })

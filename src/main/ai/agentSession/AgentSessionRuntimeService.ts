@@ -1,6 +1,7 @@
 import { application } from '@application'
 import { agentService } from '@data/services/AgentService'
 import { agentSessionMessageService } from '@data/services/AgentSessionMessageService'
+import { agentSessionService } from '@data/services/AgentSessionService'
 import { loggerService } from '@logger'
 import { serializeError } from '@main/ai/utils/serializeError'
 import { BaseService, Injectable, Phase, ServicePhase } from '@main/core/lifecycle'
@@ -176,6 +177,10 @@ export class AgentSessionRuntimeService extends BaseService {
     // bubble); agent sessions additionally recover conversation context via the resume token.
     this.reconcileStalePendingMessages()
 
+    // Net draft-prewarm reservations orphaned by a hard process-kill (the renderer normally deletes
+    // them on abandon). Scoped to `status='reserved'`, so real user sessions are never at risk.
+    this.sweepOrphanedReservedSessions()
+
     this.registerDisposable(
       agentService.onAgentUpdated(({ agentId, updates, agent }) => {
         void this.handleAgentUpdated(agentId, updates, agent).catch((error) => {
@@ -193,6 +198,14 @@ export class AgentSessionRuntimeService extends BaseService {
       agentSessionMessageService.markMessagesError(staleIds)
     } catch (error) {
       logger.error('Failed to reconcile stale pending agent-session messages', { error })
+    }
+  }
+
+  private sweepOrphanedReservedSessions(): void {
+    try {
+      agentSessionService.sweepReservedSessions()
+    } catch (error) {
+      logger.error('Failed to sweep orphaned reserved agent sessions', { error })
     }
   }
 

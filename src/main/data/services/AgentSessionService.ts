@@ -13,17 +13,20 @@ import { nullsToUndefined, timestampToISO } from '@data/services/utils/rowMapper
 import { loggerService } from '@logger'
 import { DataApiErrorFactory } from '@shared/data/api/errors'
 import type { OrderRequest } from '@shared/data/api/schemas/_endpointHelpers'
-import type {
-  AgentSessionEntity,
-  CreateAgentSessionDto,
-  DeleteAgentSessionsResult,
-  ListAgentSessionsQuery,
-  UpdateAgentSessionDto
+import {
+  AGENT_SESSION_STATUS,
+  type AgentSessionEntity,
+  type AgentSessionStatus,
+  AgentSessionStatusSchema,
+  type CreateAgentSessionDto,
+  type DeleteAgentSessionsResult,
+  type ListAgentSessionsQuery,
+  type UpdateAgentSessionDto
 } from '@shared/data/api/schemas/agentSessions'
 import { AGENT_WORKSPACE_TYPE, type AgentSessionWorkspaceSource } from '@shared/data/api/schemas/agentWorkspaces'
 import type { EntitySearchItem } from '@shared/data/api/schemas/search'
 import type { CursorPaginationResponse } from '@shared/data/api/types'
-import { and, asc, desc, eq, gte, inArray, isNull, or, type SQL, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, isNull, ne, notExists, or, type SQL, sql } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 
 import { asStringKey, decodeListCursor, encodeCursor, keysetOrdering } from './utils/keysetCursor'
@@ -46,6 +49,8 @@ function rowToSession(row: JoinedSessionRow): AgentSessionEntity {
     ...clean,
     // agentId is legitimately nullable (orphans only via cascade) — preserve T | null.
     agentId: row.session.agentId,
+    // Narrow the raw TEXT column to the status union at the boundary (mirrors rowToAgentWorkspace.type).
+    status: AgentSessionStatusSchema.parse(row.session.status),
     workspace: rowToAgentWorkspace(row.workspace),
     createdAt: timestampToISO(row.session.createdAt),
     updatedAt: timestampToISO(row.session.updatedAt)
@@ -67,7 +72,7 @@ export class AgentSessionService {
   search(query: { q: string; limit: number; updatedAtFrom?: number }): SessionEntitySearchItem[] {
     const db = application.get('DbService').getDb()
     const limit = Math.min(query.limit, MAX_LIMIT)
-    const filters: SQL[] = []
+    const filters: SQL[] = [ne(sessionsTable.status, AGENT_SESSION_STATUS.RESERVED)]
     const search = buildSearchPredicate(query.q)
     if (search) filters.push(search)
     if (query.updatedAtFrom !== undefined) {
@@ -142,7 +147,8 @@ export class AgentSessionService {
       agentId: dto.agentId,
       name: dto.name,
       description: dto.description,
-      workspaceId
+      workspaceId,
+      status: dto.status ?? AGENT_SESSION_STATUS.ACTIVE
     })
   }
 
@@ -197,7 +203,9 @@ export class AgentSessionService {
     const ordering = keysetOrdering(sessionsTable.orderKey, sessionsTable.id, { major: 'asc', tie: 'asc' })
     const cursor = decodeListCursor(query.cursor, asStringKey, 'agent-session')
 
-    const filters: SQL[] = []
+    // Exclude draft-prewarm reservations: they exist only to back a warm subprocess and must never
+    // surface in the sidebar/rail until the first send flips them to 'active'.
+    const filters: SQL[] = [ne(sessionsTable.status, AGENT_SESSION_STATUS.RESERVED)]
     if (query.agentId) filters.push(eq(sessionsTable.agentId, query.agentId))
     if (cursor) {
       filters.push(ordering.where(cursor))
@@ -232,6 +240,8 @@ export class AgentSessionService {
     }
     if (dto.description !== undefined) patch.description = dto.description
     if (dto.agentId !== undefined) patch.agentId = dto.agentId
+    // Flips a draft-prewarm reservation to 'active' on first send (see AgentPage adopt path).
+    if (dto.status !== undefined) patch.status = dto.status
     if (Object.keys(patch).length === 0) return this.getById(id)
 
     const row = withSqliteErrors(
@@ -318,6 +328,7 @@ export class AgentSessionService {
       name: string
       description?: string
       workspaceId: string
+      status: AgentSessionStatus
     }
   ): void {
     insertWithOrderKey(tx, sessionsTable, values, { pkColumn: sessionsTable.id, position: 'first' })
@@ -357,6 +368,42 @@ export class AgentSessionService {
 
     logger.info('Deleted sessions', { count: deletedIds.length })
     return { deletedIds }
+  }
+
+  /**
+   * Delete every message-less `reserved` session (draft-prewarm rows) and cascade their system
+   * workspaces/pins. Called once at boot to net reservations orphaned by a hard process-kill before
+   * the renderer's abandon cleanup ran.
+   *
+   * Two guards keep this safe: `status='reserved'` never matches a real user session (those are
+   * `active`) — the reason the old zero-message-only sweep was removed — and the message-less check
+   * protects the edge where the adopt flip failed but the send still landed messages on a row still
+   * marked `reserved`. Genuine orphaned reserves are always empty. Returns the count removed.
+   */
+  sweepReservedSessions(): number {
+    const deletedIds = application.get('DbService').withWriteTx((tx) => {
+      const rows = tx
+        .select({ session: sessionsTable, workspace: agentWorkspaceTable })
+        .from(sessionsTable)
+        .innerJoin(agentWorkspaceTable, eq(sessionsTable.workspaceId, agentWorkspaceTable.id))
+        .where(
+          and(
+            eq(sessionsTable.status, AGENT_SESSION_STATUS.RESERVED),
+            notExists(
+              tx
+                .select({ one: sql`1` })
+                .from(agentSessionMessageTable)
+                .where(eq(agentSessionMessageTable.sessionId, sessionsTable.id))
+            )
+          )
+        )
+        .all()
+
+      return this.cascadeDeleteSessionRowsTx(tx, rows)
+    })
+
+    if (deletedIds.length > 0) logger.info('Swept orphaned reserved sessions', { count: deletedIds.length })
+    return deletedIds.length
   }
 
   deleteWorkspaceCascade(workspaceId: string): void {

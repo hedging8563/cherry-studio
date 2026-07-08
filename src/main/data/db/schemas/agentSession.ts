@@ -1,3 +1,4 @@
+import { AGENT_SESSION_STATUS } from '@shared/data/api/schemas/agentSessions'
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 import { createUpdateTimestamps, orderKeyColumns, orderKeyIndex, uuidPrimaryKey } from './_columnHelpers'
@@ -17,6 +18,9 @@ export const agentSessionTable = sqliteTable(
       .notNull()
       .references(() => agentWorkspaceTable.id, { onDelete: 'cascade' }),
     traceId: text(),
+    // Lifecycle status: 'reserved' rows back a draft prewarm and are hidden from list/search + swept at
+    // boot; 'active' is a committed session. See AGENT_SESSION_STATUS.
+    status: text().notNull().default(AGENT_SESSION_STATUS.ACTIVE),
     ...orderKeyColumns,
     ...createUpdateTimestamps
   },

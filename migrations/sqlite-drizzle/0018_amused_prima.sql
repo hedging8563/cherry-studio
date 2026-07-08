@@ -1,0 +1,1 @@
+ALTER TABLE `agent_session` ADD `status` text DEFAULT 'active' NOT NULL;

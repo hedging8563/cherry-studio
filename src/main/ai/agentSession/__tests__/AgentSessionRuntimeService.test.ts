@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   getLastRuntimeResumeToken: vi.fn(),
   findPendingAssistantMessageIds: vi.fn(),
   markMessagesError: vi.fn(),
+  sweepReservedSessions: vi.fn(),
   maybeRenameAgentSession: vi.fn(),
   applicationGet: vi.fn(),
   startRuntimeTurn: vi.fn(),
@@ -23,6 +24,10 @@ vi.mock('@data/services/AgentSessionMessageService', () => ({
     findPendingAssistantMessageIds: mocks.findPendingAssistantMessageIds,
     markMessagesError: mocks.markMessagesError
   }
+}))
+
+vi.mock('@data/services/AgentSessionService', () => ({
+  agentSessionService: { sweepReservedSessions: mocks.sweepReservedSessions }
 }))
 
 vi.mock('@main/services/TopicNamingService', () => ({
@@ -121,6 +126,7 @@ describe('AgentSessionRuntimeService', () => {
     mocks.getLastRuntimeResumeToken.mockReturnValue(null)
     mocks.findPendingAssistantMessageIds.mockReturnValue([])
     mocks.markMessagesError.mockReturnValue(undefined)
+    mocks.sweepReservedSessions.mockReturnValue(0)
     mocks.applicationGet.mockImplementation((name: string) => {
       if (name === 'AiStreamManager') {
         return {
@@ -204,6 +210,30 @@ describe('AgentSessionRuntimeService', () => {
         'Failed to reconcile stale pending agent-session messages',
         { error: failure }
       )
+    })
+  })
+
+  describe('sweepOrphanedReservedSessions — boot cleanup', () => {
+    it('sweeps orphaned reserved sessions on init', async () => {
+      const service = new AgentSessionRuntimeService()
+
+      await (service as any).onInit()
+
+      expect(mocks.sweepReservedSessions).toHaveBeenCalledOnce()
+    })
+
+    it('logs and does not rethrow when the sweep throws, so boot is not blocked', async () => {
+      const failure = new Error('db down')
+      mocks.sweepReservedSessions.mockImplementation(() => {
+        throw failure
+      })
+      const service = new AgentSessionRuntimeService()
+
+      await expect((service as any).onInit()).resolves.toBeUndefined()
+
+      expect(mockMainLoggerService.error).toHaveBeenCalledWith('Failed to sweep orphaned reserved agent sessions', {
+        error: failure
+      })
     })
   })
 

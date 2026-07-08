@@ -1286,7 +1286,8 @@ describe('AgentPage', () => {
     await waitFor(() =>
       expect(agentPageMocks.dataApiPost).toHaveBeenCalledWith(
         '/agent-sessions',
-        expect.objectContaining({ body: expect.objectContaining({ agentId: 'agent-a' }) })
+        // Created as 'reserved' so the row is excluded from list/search until the send flips it.
+        expect.objectContaining({ body: expect.objectContaining({ agentId: 'agent-a', status: 'reserved' }) })
       )
     )
     expect(agentPageMocks.ipcRequest).toHaveBeenCalledWith('ai.prewarm_agent_session', { sessionId: 'session-created' })
@@ -1334,12 +1335,36 @@ describe('AgentPage', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Persist draft session' }))
     })
 
-    // Renamed via an awaited PATCH (not fire-and-forget), no second create, then handed off.
+    // Flipped to 'active' + renamed via one awaited PATCH (not fire-and-forget), no second create.
     expect(agentPageMocks.dataApiPatch).toHaveBeenCalledWith('/agent-sessions/session-created', {
-      body: { name: 'hello' }
+      body: { status: 'active', name: 'hello' }
     })
     expect(agentPageMocks.dataApiPost).toHaveBeenCalledTimes(1)
     await waitFor(() => expect(agentPageMocks.activeSessionOptions?.activeSessionId).toBe('session-created'))
+  })
+
+  it('flips the adopted session to active even when the placeholder title is unchanged', async () => {
+    agentPageMocks.routeSearch = {}
+    // Reserve resolves with the same name the send would produce, so no rename is needed — but the
+    // status flip is still mandatory or the adopted row stays hidden from list/search.
+    agentPageMocks.dataApiPost.mockResolvedValueOnce({ ...agentPageMocks.persistedSession, name: 'hello' })
+    agentPageMocks.dataApiPatch.mockResolvedValue({ ...agentPageMocks.persistedSession, name: 'hello' })
+    render(<AgentPage />)
+    await waitFor(() => expect(screen.getByTestId('draft-session')).toHaveTextContent('agent-a'))
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Compose intent' }))
+    })
+    await waitFor(() => expect(agentPageMocks.dataApiPost).toHaveBeenCalledTimes(1))
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Persist draft session' }))
+    })
+
+    // Status-only PATCH (no `name` key) — the flip fires regardless of the title.
+    expect(agentPageMocks.dataApiPatch).toHaveBeenCalledWith('/agent-sessions/session-created', {
+      body: { status: 'active' }
+    })
   })
 
   it('discards the reserved session when the draft is abandoned without sending', async () => {
