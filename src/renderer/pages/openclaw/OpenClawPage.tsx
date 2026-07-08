@@ -558,7 +558,7 @@ const OpenClawPage: FC = () => {
 
   const renderCheckingContent = () => (
     <div id="content-container" className="flex flex-1 flex-col items-center justify-center">
-      <Loader2 className="size-7 animate-spin" style={{ color: 'var(--color-primary)' }} />
+      <Loader2 className="size-7 animate-spin" style={{ color: 'var(--color-control-accent)' }} />
       <div className="mt-4" style={{ color: 'var(--color-text-3)' }}>
         {t('openclaw.checking_installation')}
       </div>

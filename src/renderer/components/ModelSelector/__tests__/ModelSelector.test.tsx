@@ -408,7 +408,7 @@ describe('ModelSelector', () => {
       'hover:bg-transparent',
       'text-foreground!'
     )
-    expect(screen.getByLabelText('models.action.unpin')).not.toHaveClass('text-primary!')
+    expect(screen.getByLabelText('models.action.unpin')).not.toHaveClass('text-control-accent!')
   })
 
   it('renders filter tags as icon-only chips', () => {
@@ -445,7 +445,7 @@ describe('ModelSelector', () => {
     render(<ModelSelector open multiple={false} trigger={<button type="button">open</button>} onSelect={vi.fn()} />)
 
     expect(screen.getByLabelText('models.action.pin')).toHaveClass('text-foreground!')
-    expect(screen.getByLabelText('models.action.pin')).not.toHaveClass('text-primary!')
+    expect(screen.getByLabelText('models.action.pin')).not.toHaveClass('text-control-accent!')
   })
 
   it('keeps keyboard focus stable when multi-select value changes while open', async () => {

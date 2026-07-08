@@ -253,7 +253,7 @@ export function ModelSyncPreviewFooter({
       <div className="flex flex-wrap items-center gap-3 text-foreground-muted text-xs">
         {hasNew ? (
           <span className="inline-flex items-center gap-1">
-            <Plus className="size-3 text-primary" aria-hidden />
+            <Plus className="size-3 text-control-accent" aria-hidden />
             {t('settings.models.manage.fetch_summary_add', {
               selected: selectedAddedIds.size,
               total: preview.added.length

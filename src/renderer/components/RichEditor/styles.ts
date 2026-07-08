@@ -266,8 +266,8 @@ const STYLE_CONTENT = `
 }
 
 .TableOfContentsWrapper .toc-item.is-active a {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-control-accent) 60%, transparent);
+  color: var(--color-control-accent);
   font-weight: 500;
 }
 

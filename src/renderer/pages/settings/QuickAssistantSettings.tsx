@@ -179,7 +179,7 @@ const QuickAssistantSettings: FC = () => {
                                   defaultModel={defaultModel}
                                 />
                                 {assistant.id === quickAssistantId && (
-                                  <Check size={14} className="ml-auto text-primary" />
+                                  <Check size={14} className="ml-auto text-control-accent" />
                                 )}
                               </CommandItem>
                             ))}
@@ -260,7 +260,11 @@ const DefaultTag = ({
   ...props
 }: React.ComponentPropsWithoutRef<'span'> & { isCurrent: boolean }) => (
   <span
-    className={cn('rounded px-1 py-0.5 text-xs', isCurrent ? 'text-primary' : 'text-foreground-muted', className)}
+    className={cn(
+      'rounded px-1 py-0.5 text-xs',
+      isCurrent ? 'text-control-accent' : 'text-foreground-muted',
+      className
+    )}
     {...props}
   />
 )

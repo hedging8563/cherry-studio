@@ -22,7 +22,7 @@ export function ActiveIndicator({ className, glow = false }: { className?: strin
 
 export function DefaultLogo({ title }: { title: string }) {
   return (
-    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-primary/15 font-medium text-primary text-sm">
+    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-control-accent/15 font-medium text-control-accent text-sm">
       {title ? title.slice(0, 1).toUpperCase() : ''}
     </div>
   )

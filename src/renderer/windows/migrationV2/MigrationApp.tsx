@@ -56,7 +56,7 @@ const logger = loggerService.withContext('MigrationApp')
 type BadgeTone = 'primary' | 'success' | 'warning' | 'destructive' | 'neutral'
 
 const badgeToneClass: Record<BadgeTone, string> = {
-  primary: 'border-primary-mute bg-primary/10 text-primary',
+  primary: 'border-control-accent/30 bg-control-accent/10 text-control-accent',
   success: 'border-success-bg-hover bg-success-bg text-success',
   warning: 'border-warning-bg-hover bg-warning-bg text-warning',
   destructive: 'border-error-border bg-error-bg text-error-text',
@@ -76,7 +76,7 @@ const StageBadge: React.FC<{ tone?: BadgeTone; children: React.ReactNode }> = ({
 const ProgressBar: React.FC<{ value: number }> = ({ value }) => (
   <div className="relative h-2 w-full overflow-hidden rounded-full bg-secondary">
     <div
-      className="h-full rounded-full bg-primary transition-[width] duration-300"
+      className="h-full rounded-full bg-control-accent transition-[width] duration-300"
       style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
     />
   </div>
@@ -139,7 +139,7 @@ const StepRail: React.FC<{ stage: MigrationStage }> = ({ stage }) => {
                 <span
                   className={cn(
                     '-translate-x-1/2 absolute top-1/2 left-3 h-11 w-px',
-                    done ? 'bg-primary/40' : 'bg-border'
+                    done ? 'bg-control-accent/40' : 'bg-border'
                   )}
                 />
               )}
@@ -147,7 +147,7 @@ const StepRail: React.FC<{ stage: MigrationStage }> = ({ stage }) => {
                 className={cn(
                   'relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-medium text-sm',
                   isError && 'bg-destructive text-destructive-foreground',
-                  !isError && (active || done) && 'bg-primary text-white',
+                  !isError && (active || done) && 'bg-control-accent text-control-accent-foreground',
                   !isError && !active && !done && 'border border-border bg-background text-foreground-muted'
                 )}>
                 {isError ? (

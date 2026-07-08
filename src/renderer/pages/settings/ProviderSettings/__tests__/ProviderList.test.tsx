@@ -303,7 +303,7 @@ describe('ProviderList', () => {
     const searchWrap = screen.getByPlaceholderText('搜索模型平台...').closest('div')
 
     expect(addButton.compareDocumentPosition(filterButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(addButton).toHaveClass('size-7', 'text-primary')
+    expect(addButton).toHaveClass('size-7', 'text-control-accent')
     expect(searchWrap).toContainElement(filterButton)
     expect(searchWrap).not.toContainElement(addButton)
     expect(filterButton).toHaveClass('size-[22px]')
@@ -352,7 +352,7 @@ describe('ProviderList', () => {
     expect(screen.queryByText('Gemini')).not.toBeInTheDocument()
     const filterButton = screen.getByRole('button', { name: '筛选服务商' })
     expect(filterButton).not.toHaveClass('bg-primary/10')
-    expect(filterButton.querySelector('svg')).toHaveClass('text-primary!')
+    expect(filterButton.querySelector('svg')).toHaveClass('text-control-accent!')
   })
 
   it('shows management actions for preset-derived and custom providers but not canonical presets', () => {

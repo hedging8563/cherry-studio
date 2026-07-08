@@ -151,9 +151,9 @@ const OvmsSettings: FC = () => {
       </div>
 
       <div
-        className="mt-1.5 flex gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2.5 text-foreground text-sm"
+        className="mt-1.5 flex gap-2 rounded-md border border-control-accent/20 bg-control-accent/5 px-3 py-2.5 text-foreground text-sm"
         role="status">
-        <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+        <Info className="mt-0.5 size-4 shrink-0 text-control-accent" aria-hidden />
         <div className="min-w-0 flex-1 space-y-1">
           <p className="font-medium">{t('ovms.guide')}</p>
           <div>
@@ -165,7 +165,7 @@ const OvmsSettings: FC = () => {
                 p: <p />,
                 a: (
                   <a
-                    className="text-primary underline-offset-4 hover:underline"
+                    className="text-link underline-offset-4 hover:underline"
                     href="https://github.com/openvinotoolkit/model_server/blob/c55551763d02825829337b62c2dcef9339706f79/docs/deploying_server_baremetal.md"
                     rel="noreferrer"
                     target="_blank"

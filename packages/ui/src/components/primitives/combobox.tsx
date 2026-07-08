@@ -365,7 +365,7 @@ export function Combobox<TExtra extends object = Record<never, never>>({
             <span
               key={option.value}
               className={cn(
-                'bg-primary/10 text-primary',
+                'bg-control-accent/10 text-control-accent',
                 'gap-1 px-2 py-0.5',
                 'inline-flex items-center rounded',
                 'text-success-foreground text-xs'

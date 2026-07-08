@@ -288,7 +288,7 @@ export function TreeSelect({
       <>
         {option.icon && <span className="shrink-0">{option.icon}</span>}
         <span className="min-w-0 flex-1 truncate">{getOptionLabel(option)}</span>
-        {renderState.selected && <Check className="size-4 shrink-0 text-primary" />}
+        {renderState.selected && <Check className="size-4 shrink-0 text-control-accent" />}
       </>
     )
   }
@@ -324,7 +324,7 @@ export function TreeSelect({
               onClick={() => handleSelect(option)}
               className={cn(
                 'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none transition-colors',
-                selected ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-accent/60',
+                selected ? 'bg-control-accent/10 text-control-accent' : 'text-foreground hover:bg-accent/60',
                 option.disabled && 'pointer-events-none opacity-50',
                 option.selectable === false && 'text-muted-foreground'
               )}>

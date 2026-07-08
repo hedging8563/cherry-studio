@@ -56,7 +56,7 @@ const InlineLoadingState: FC<{ text: ReactNode; onCancel: () => void; cancelLabe
         className="relative h-1.5 w-full overflow-hidden rounded-full bg-muted"
         role="progressbar"
         aria-label={progressLabel}>
-        <span className="animation-migration-backup-progress-indeterminate absolute inset-y-0 left-0 w-1/3 min-w-20 rounded-full bg-linear-to-r from-primary/0 via-primary to-primary/0" />
+        <span className="animation-migration-backup-progress-indeterminate absolute inset-y-0 left-0 w-1/3 min-w-20 rounded-full bg-linear-to-r from-control-accent/0 via-control-accent to-control-accent/0" />
       </div>
       <Button type="button" variant="outline" size="sm" onClick={onCancel} className="min-w-20">
         {cancelLabel}

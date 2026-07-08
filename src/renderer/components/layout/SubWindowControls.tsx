@@ -45,7 +45,7 @@ export const SubWindowControls = () => {
           aria-label={pinLabel}
           aria-pressed={pinned}
           onClick={handleTogglePin}
-          className={cn(pinned && 'text-primary! hover:text-primary!')}>
+          className={cn(pinned && 'text-control-accent! hover:text-control-accent!')}>
           <Pin className={pinned ? 'fill-current' : undefined} />
         </NavbarIcon>
       </Tooltip>

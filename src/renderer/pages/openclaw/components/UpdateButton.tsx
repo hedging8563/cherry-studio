@@ -91,11 +91,11 @@ const UpdateButton: FC<UpdateButtonProps> = ({ onUpdateComplete, onUpdatingChang
   return (
     <span className="inline-flex cursor-pointer items-center gap-1" onClick={handleClick}>
       {isUpdating ? (
-        <Loader2 className="size-3! animate-spin" style={{ color: 'var(--color-primary)' }} />
+        <Loader2 className="size-3! animate-spin" style={{ color: 'var(--color-control-accent)' }} />
       ) : (
-        <ArrowUpCircle className="size-3!" color="var(--color-primary)" />
+        <ArrowUpCircle className="size-3!" color="var(--color-control-accent)" />
       )}
-      <span className="text-xs" style={{ color: 'var(--color-primary)' }}>
+      <span className="text-xs" style={{ color: 'var(--color-control-accent)' }}>
         {isUpdating ? t('openclaw.update.updating') : `v${updateInfo?.latestVersion}`}
       </span>
     </span>

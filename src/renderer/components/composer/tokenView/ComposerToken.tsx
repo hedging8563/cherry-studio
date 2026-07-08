@@ -75,7 +75,7 @@ function renderActiveComposerTokenElement({
   maxWidthClassName = 'max-w-52',
   onMouseDown,
   icon,
-  colorClassName = 'text-primary'
+  colorClassName = 'text-control-accent'
 }: ActiveComposerTokenProps) {
   const title = token.kind === 'quote' ? undefined : (token.description ?? token.promptText ?? token.label)
 
@@ -85,7 +85,7 @@ function renderActiveComposerTokenElement({
         'mx-0.5 inline-flex select-none items-baseline gap-1 align-baseline leading-[inherit]',
         maxWidthClassName,
         colorClassName,
-        selected && 'text-primary underline decoration-primary/40 underline-offset-2',
+        selected && 'text-control-accent underline decoration-control-accent/40 underline-offset-2',
         className
       )}
       title={title}
@@ -107,7 +107,7 @@ function TokenPreviewCard({
   token,
   typeLabel,
   icon,
-  iconClassName = 'bg-accent text-primary',
+  iconClassName = 'bg-accent text-control-accent',
   primaryAction
 }: {
   token: ChatTokenView
@@ -468,7 +468,7 @@ export function FileComposerToken(props: FileComposerTokenProps) {
         'mx-0.5 my-0.5 inline-flex h-6 max-w-52 select-none items-center gap-1 overflow-hidden rounded-md border px-1.5 align-baseline font-medium text-foreground text-xs leading-[inherit] transition-[color,box-shadow,border-color]',
         'group-focus-visible:ring-[3px] group-focus-visible:ring-ring/50 group-data-[state=open]:ring-1 group-data-[state=open]:ring-ring/50',
         presentation.containerClassName,
-        props.selected && 'border-primary ring-1 ring-ring',
+        props.selected && 'border-control-accent ring-1 ring-ring',
         props.className
       )}
       title={title}

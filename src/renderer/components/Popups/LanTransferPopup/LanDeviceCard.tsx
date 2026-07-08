@@ -65,7 +65,7 @@ export const LanDeviceCard: FC<LanDeviceCardProps> = ({
         'focus-visible:border-[var(--color-primary)] focus-visible:shadow-[0_0_0_2px_rgba(24,144,255,0.2)]',
         // Connected state
         isConnected
-          ? 'border-[var(--color-primary)] bg-[rgba(24,144,255,0.04)]'
+          ? 'border-[var(--color-control-accent)] bg-control-accent/5'
           : 'border-[var(--color-border)] bg-[var(--color-background)]',
         // Disabled state
         isDisabled && 'pointer-events-none translate-y-0 opacity-70 shadow-none'

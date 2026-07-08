@@ -145,7 +145,7 @@ const SelectionActionUserModal: FC<SelectionActionUserModalProps> = ({
                     href="https://lucide.dev/icons/"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-primary text-xs">
+                    className="text-link text-xs">
                     {t('selection.settings.user_modal.icon.view_all')}
                   </a>
                   <Tooltip content={t('selection.settings.user_modal.icon.random')}>
@@ -331,7 +331,7 @@ const CurrentTag = ({
   <span
     className={cn(
       'shrink-0 rounded px-1 py-0.5 text-xs',
-      isCurrent ? 'text-primary' : 'text-foreground-muted',
+      isCurrent ? 'text-control-accent' : 'text-foreground-muted',
       className
     )}
     {...props}
@@ -341,7 +341,7 @@ const CurrentTag = ({
 const DiceButton = ({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) => (
   <div
     className={cn(
-      'ml-1 flex cursor-pointer items-center justify-center transition-all active:rotate-720 [&_.btn-icon]:text-foreground-secondary hover:[&_.btn-icon]:text-primary',
+      'ml-1 flex cursor-pointer items-center justify-center transition-all active:rotate-720 [&_.btn-icon]:text-foreground-secondary hover:[&_.btn-icon]:text-control-accent',
       className
     )}
     {...props}

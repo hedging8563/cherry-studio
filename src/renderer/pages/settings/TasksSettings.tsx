@@ -802,7 +802,7 @@ const badgeColorClass = (value: string) => {
       // Raw blue-500 to match the left-list status dot (statusDotColors.completed) exactly.
       return 'border-blue-500/30 bg-blue-500/10 text-blue-500'
     case 'blue':
-      return 'border-primary/30 bg-primary/10 text-primary'
+      return 'border-control-accent/30 bg-control-accent/10 text-control-accent'
     case 'purple':
       return 'border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400'
     case 'error':

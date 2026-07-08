@@ -244,10 +244,10 @@ const SelectionActionContent: FC<{ action: SelectionActionItem }> = ({ action })
             placement="bottom">
             <WindowButton
               onClick={togglePin}
-              className={isPinned ? 'bg-primary/10 text-primary hover:bg-primary/10' : ''}>
+              className={isPinned ? 'bg-control-accent/10 text-control-accent hover:bg-control-accent/10' : ''}>
               <Pin
                 size={14}
-                className={isPinned ? 'rotate-45 text-primary transition-transform' : 'transition-transform'}
+                className={isPinned ? 'rotate-45 text-control-accent transition-transform' : 'transition-transform'}
               />
             </WindowButton>
           </Tooltip>
@@ -257,7 +257,9 @@ const SelectionActionContent: FC<{ action: SelectionActionItem }> = ({ action })
             isOpen={showOpacitySlider ? false : undefined}>
             <WindowButton
               onClick={() => setShowOpacitySlider(!showOpacitySlider)}
-              className={showOpacitySlider ? 'bg-primary/10 text-primary hover:bg-primary/10' : 'pb-0.5'}>
+              className={
+                showOpacitySlider ? 'bg-control-accent/10 text-control-accent hover:bg-control-accent/10' : 'pb-0.5'
+              }>
               <Droplet size={14} />
             </WindowButton>
           </Tooltip>

@@ -95,9 +95,9 @@ const tabsTriggerVariants = cva(
           'relative gap-2 px-2 py-2',
           'font-normal text-muted-foreground hover:text-foreground',
           'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-          'data-[state=active]:text-primary',
+          'data-[state=active]:text-control-accent',
           'after:absolute after:rounded-full after:bg-transparent',
-          'data-[state=active]:after:bg-primary'
+          'data-[state=active]:after:bg-control-accent'
         ],
         underline: [
           'relative gap-1.5 px-2.5 py-2',
@@ -105,7 +105,7 @@ const tabsTriggerVariants = cva(
           'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
           'data-[state=active]:text-foreground',
           'after:absolute after:rounded-none after:bg-transparent',
-          'data-[state=active]:after:bg-primary'
+          'data-[state=active]:after:bg-control-accent'
         ],
         workflow: [
           'relative gap-1.5 px-1 py-1.5 text-sm font-normal',
@@ -134,8 +134,8 @@ const tabsTriggerVariants = cva(
         variant: 'line',
         orientation: 'vertical',
         class: [
-          'justify-center after:bottom-0 after:left-0 after:h-[4px] after:w-full after:bg-transparent data-[state=active]:after:bg-primary',
-          'hover:text-primary hover:bg-primary/10'
+          'justify-center after:bottom-0 after:left-0 after:h-[4px] after:w-full after:bg-transparent data-[state=active]:after:bg-control-accent',
+          'hover:text-control-accent hover:bg-control-accent/10'
         ]
       },
       {

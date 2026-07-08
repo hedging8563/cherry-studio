@@ -571,7 +571,7 @@ const MigrationProgressBar = ({ percent, status, strokeWidth }: MigrationProgres
         <div
           className={cn(
             'h-full rounded-full transition-[width] duration-300',
-            status === 'success' ? 'bg-success' : 'bg-primary'
+            status === 'success' ? 'bg-success' : 'bg-control-accent'
           )}
           style={{ width: `${normalizedPercent}%` }}
         />

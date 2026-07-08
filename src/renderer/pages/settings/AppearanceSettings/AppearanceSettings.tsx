@@ -458,7 +458,8 @@ const AppearanceSettings: FC = () => {
 
       <SettingGroup theme={theme} className={appearanceSectionClassName}>
         <SettingTitle style={{ justifyContent: 'flex-start', gap: 5 }}>
-          {t('settings.display.font.title')} <Badge className="border-primary/20 bg-primary/10 text-primary">New</Badge>
+          {t('settings.display.font.title')}{' '}
+          <Badge className="border-control-accent/20 bg-control-accent/10 text-control-accent">New</Badge>
         </SettingTitle>
         <SettingDivider />
         <SettingRow>

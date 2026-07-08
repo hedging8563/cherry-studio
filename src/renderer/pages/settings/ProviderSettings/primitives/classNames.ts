@@ -59,7 +59,7 @@ export const providerListClasses = {
   headerIconButton:
     'flex size-6 shrink-0 items-center justify-center rounded-md text-foreground/45 transition-colors hover:bg-accent/40 hover:text-foreground/75 disabled:pointer-events-none disabled:opacity-30',
   headerAddButton:
-    'flex size-7 shrink-0 items-center justify-center rounded-md text-primary transition-colors hover:bg-accent/40 hover:text-primary disabled:pointer-events-none disabled:opacity-30',
+    'flex size-7 shrink-0 items-center justify-center rounded-md text-control-accent transition-colors hover:bg-accent/40 hover:text-control-accent disabled:pointer-events-none disabled:opacity-30',
   searchInlineAddButton:
     'flex size-[22px] shrink-0 items-center justify-center rounded-md transition-colors hover:bg-accent/40 disabled:pointer-events-none disabled:opacity-30',
   searchRow: 'flex items-center gap-1.5 px-2.5 pb-2.5',
@@ -167,7 +167,7 @@ export const drawerClasses = {
   /** Model health-check drawer: determinate progress (scoped neutral track + primary fill). */
   healthProgressTrack:
     'h-1.5 w-full overflow-hidden rounded-full bg-[color:color-mix(in_srgb,var(--muted-foreground)_12%,transparent)]',
-  healthProgressFill: 'h-full rounded-full bg-primary transition-[width] duration-300 ease-out',
+  healthProgressFill: 'h-full rounded-full bg-control-accent transition-[width] duration-300 ease-out',
   healthProgressMeta: 'text-[13px] tabular-nums text-muted-foreground/85',
   healthProgressCurrent: 'truncate text-[13px] text-foreground/80'
 } as const
@@ -189,7 +189,7 @@ export const modelListClasses = {
   sectionTitle: cn(sectionHeadingBase, 'shrink-0 whitespace-nowrap font-semibold'),
   titleHelpRow: 'flex min-w-0 flex-wrap items-center gap-x-1 self-center text-foreground-muted',
   titleHelpText: 'shrink-0 opacity-60',
-  titleHelpLink: 'mx-0 inline-flex shrink-0 items-center leading-[1.3] text-primary hover:underline',
+  titleHelpLink: 'mx-0 inline-flex shrink-0 items-center leading-[1.3] text-link hover:underline',
   titleHelpSeparator: 'inline-flex shrink-0 items-center leading-[1.3] text-foreground-muted/50',
   countMeta: 'text-xs leading-tight text-foreground-muted tabular-nums',
   toolbarGhost:
@@ -272,7 +272,7 @@ export const modelListClasses = {
   manageDrawerBulkGhost:
     'inline-flex !h-auto !min-h-0 items-center justify-center gap-1 rounded-lg px-1.5 py-[2px] text-xs font-medium tracking-[-0.14px] text-muted-foreground/60 shadow-none transition-colors hover:bg-accent has-[>svg]:px-1.5',
   /** Enable-all hover — primary action color. */
-  manageDrawerBulkGhostEnableHover: 'hover:!text-primary',
+  manageDrawerBulkGhostEnableHover: 'hover:!text-control-accent',
   /** Disable-all hover — destructive (design draft). */
   manageDrawerBulkGhostDisableHover: 'hover:!text-destructive',
   /** Provider-grouped card: bordered shell with leading chevron; rows render inside the same card on expand. */
@@ -355,7 +355,7 @@ export const modelSyncClasses = {
   fetchSection: 'min-w-0',
   fetchSectionHeader: 'mb-2.5 flex items-center justify-between gap-3',
   fetchSectionTitleRow: 'flex items-center gap-1.5',
-  fetchDotNew: 'h-[6px] w-[6px] shrink-0 rounded-full bg-primary',
+  fetchDotNew: 'h-[6px] w-[6px] shrink-0 rounded-full bg-control-accent',
   fetchDotRemoved: 'h-[6px] w-[6px] shrink-0 rounded-full bg-destructive',
   fetchSectionTitle: 'text-sm font-medium text-foreground leading-5',
   fetchSectionCount: 'text-xs leading-tight text-foreground-muted tabular-nums',
@@ -412,14 +412,14 @@ export const oauthCardClasses = {
     'h-auto min-h-0 p-0 text-xs text-muted-foreground/60 shadow-none hover:bg-transparent hover:text-foreground',
   loginFooterDivider: 'text-xs text-muted-foreground/50',
   /** CherryIN portal link — matches scoped caption + primary link treatment. */
-  externalLink: 'mt-1 inline-block text-xs leading-tight text-primary hover:underline',
+  externalLink: 'mt-1 inline-block text-xs leading-tight text-link hover:underline',
   /** Logged-in CherryIN: mock CherryIN account section — one row, no stat grid. */
   shellLoggedIn: 'w-full min-w-0 overflow-hidden rounded-xl border border-border-subtle px-3 py-2.5',
   loggedInRow: 'flex w-full min-w-0 flex-wrap items-center justify-between gap-3',
   profileMeta: 'flex min-w-0 flex-1 items-center gap-3',
   /** Avatar: 32px round avatar, primary fill, initials (/ CherryIN row). */
   avatarSm:
-    'flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-white',
+    'flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-control-accent text-xs font-semibold text-control-accent-foreground',
   nameBlock: 'min-w-0',
   nameRow: 'flex flex-wrap items-center gap-1.5',
   name: 'truncate text-[15px] leading-[1.2] font-semibold tracking-tight text-foreground',
@@ -479,5 +479,5 @@ export const fieldClasses = {
   apiKeyVisibilityToggle:
     'flex size-5 shrink-0 items-center justify-center text-muted-foreground/70 transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-40',
   titleWithHelp: 'flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1',
-  titleHelpLink: 'mx-0 inline-flex shrink-0 items-center leading-5 text-primary hover:underline'
+  titleHelpLink: 'mx-0 inline-flex shrink-0 items-center leading-5 text-link hover:underline'
 } as const

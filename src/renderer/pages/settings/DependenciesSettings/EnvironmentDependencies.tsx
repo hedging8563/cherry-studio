@@ -361,7 +361,7 @@ const BinaryToolPresetCard: FC<{
           <div
             className={cn(
               'flex size-10 shrink-0 items-center justify-center rounded-xl',
-              present ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+              present ? 'bg-control-accent/10 text-control-accent' : 'bg-muted text-muted-foreground'
             )}>
             <ToolIcon icon={tool.icon} />
           </div>
@@ -502,7 +502,7 @@ const CustomToolCard: FC<{
           <div
             className={cn(
               'flex size-10 shrink-0 items-center justify-center rounded-xl',
-              installed ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+              installed ? 'bg-control-accent/10 text-control-accent' : 'bg-muted text-muted-foreground'
             )}>
             <ToolIcon />
           </div>

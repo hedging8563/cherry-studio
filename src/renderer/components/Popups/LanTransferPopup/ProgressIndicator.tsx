@@ -45,7 +45,7 @@ export const ProgressIndicator: FC<ProgressIndicatorProps> = ({ transferState, h
               ? 'bg-[var(--color-error)]'
               : isCompleted
                 ? 'bg-[var(--color-status-success)]'
-                : 'bg-[var(--color-primary)]'
+                : 'bg-[var(--color-control-accent)]'
           )}
           style={{ width: `${progressPercent}%` }}
         />

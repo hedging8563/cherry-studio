@@ -225,7 +225,7 @@ const SelectionAssistantSettings: FC = () => {
                   content={
                     <div>
                       {t('selection.settings.toolbar.trigger_mode.shortcut_note')}
-                      <Link to="/settings/shortcut" style={{ color: 'var(--color-primary)' }}>
+                      <Link to="/settings/shortcut" style={{ color: 'var(--color-link)' }}>
                         {t('selection.settings.toolbar.trigger_mode.shortcut_link')}
                       </Link>
                     </div>
